@@ -20,6 +20,19 @@
   - увечері (за замовчуванням о 21:00 за місцевим часом), якщо на сьогодні лишилися невиконані завдання, — з кнопками «✓» і «→ Завтра» прямо в чаті.
 - Команди бота: `/today` — план на сьогодні, `/add 18:30 Зателефонувати мамі`, `/tomorrow Купити хліб`.
 
+## Запуск для користувачів (Railway)
+
+1. **Створіть бота:** у Telegram відкрийте @BotFather → `/newbot` → назва `Ritmoza` → імʼя користувача, напр. `ritmoza_bot`.
+   BotFather дасть **токен** і **посилання** `t.me/ritmoza_bot` — саме його надсилайте новим користувачам.
+   Токен нікому не показуйте і не пишіть у чати.
+2. **Аватарка:** у @BotFather `/setuserpic` → оберіть бота → надішліть `webapp/brand/bot-avatar.png`.
+3. **Хостинг:** на https://railway.com → New Project → Deploy from GitHub repo → `vnssrsh-dot/planner`,
+   гілка `claude/telegram-task-planner-proto-3mflfv` (збирається з `Dockerfile`).
+4. **Змінні** (Variables): `BOT_TOKEN` = токен від BotFather.
+5. **Диск для бази:** Add Volume → шлях `/data` (там зберігається `planner.db`, щоб справи не зникали після перезапуску).
+6. **Публічна адреса:** Settings → Networking → Generate Domain. `WEBAPP_URL` підставиться сам.
+7. Напишіть боту `/start` — зʼявиться план і кнопка «Відкрити Ritmoza».
+
 ## Демо в браузері (GitHub Pages)
 
 У папці `docs/` лежать автономні демо (дані зберігаються в браузері, без сервера):
