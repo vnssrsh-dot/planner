@@ -124,6 +124,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .task.done .task-title { text-decoration: line-through; color: var(--inactive); }
 .task-meta { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 1px; }
 .task-meta .note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.task-meta span:not(.note) { flex: none; white-space: nowrap; }
+.task-meta .note { min-width: 0; }
 .time {
   flex: none; font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums;
   background: var(--blue); padding: 2px 7px; border-radius: 6px;
