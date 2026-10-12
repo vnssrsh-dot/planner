@@ -140,8 +140,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .empty-btn { justify-self: start; flex: none; padding: 10px 16px; font-size: 14px; }
 
 .done-block { margin-top: 20px; }
-.done-block summary { color: var(--muted); font-size: 13px; padding: 0 2px 8px; cursor: pointer; list-style: none; }
+.done-block summary {
+  display: inline-flex; align-items: center; gap: 9px; margin: 0 0 8px -6px; padding: 6px 8px 6px 6px;
+  color: var(--muted); font-size: 13px; border-radius: 8px; cursor: pointer; list-style: none; user-select: none;
+}
 .done-block summary::-webkit-details-marker { display: none; }
+/* стрілочка-шеврон: вниз — згорнуто, вгору — розгорнуто */
+.done-block summary::after {
+  content: ""; width: 7px; height: 7px; margin-top: -4px;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+  transition: transform .2s ease, margin .2s ease;
+}
+.done-block[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
+.done-block summary:active { background: var(--line); }
+.done-block summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- кнопка додавання ---------- */
 .fab {
