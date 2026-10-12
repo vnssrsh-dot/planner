@@ -171,6 +171,42 @@ const GREETINGS = {
   ],
 };
 
+/* Маленька лінійна іконка в блоці привітання — випадкова при кожному відкритті.
+   when: "day" — лише вдень (5–18), "night" — лише ввечері/вночі; без when — будь-коли. */
+const HERO_ICONS = [
+  { name: "зірочка", svg: '<path d="M12 2.5c.6 4.9 2.9 7.3 9.5 9.5-6.6 2.2-8.9 4.6-9.5 9.5-.6-4.9-2.9-7.3-9.5-9.5 6.6-2.2 8.9-4.6 9.5-9.5Z"/>' },
+  { name: "сонце", when: "day", svg: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>' },
+  { name: "місяць", when: "night", svg: '<path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10Z"/>' },
+  { name: "хмаринка", svg: '<path d="M7.5 18.5h9.5a4 4 0 0 0 .4-7.98A5.5 5.5 0 0 0 6.9 9.6 4.5 4.5 0 0 0 7.5 18.5Z"/>' },
+  { name: "сердечко", svg: '<path d="M12 20s-7.5-4.4-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.6 12 20 12 20Z"/>' },
+  { name: "конвертик", svg: '<rect x="3.5" y="6" width="17" height="12.5" rx="2"/><path d="M4.2 7.2 12 13l7.8-5.8"/>' },
+  { name: "машина", svg: '<path d="M3.5 15.5v-3l2.1-4.3a1.6 1.6 0 0 1 1.4-.9h10a1.6 1.6 0 0 1 1.4.9l2.1 4.3v3h-1.8M7.3 15.5h9.4M5.3 15.5H3.5M3.5 12.5h17"/><circle cx="7.3" cy="16" r="1.8"/><circle cx="16.7" cy="16" r="1.8"/>' },
+  { name: "телефон", svg: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.3h2"/>' },
+  { name: "пляшечка", svg: '<path d="M10 2.5h4v3.2l1.6 2.6v10.7a2.2 2.2 0 0 1-2.2 2.2h-2.8a2.2 2.2 0 0 1-2.2-2.2V8.3L10 5.7Z"/><path d="M8.4 12h7.2M8.4 16h7.2"/>' },
+  { name: "кава", svg: '<path d="M5 9.5h11v4.3a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5Z"/><path d="M16 11h1.4a2.3 2.3 0 0 1 0 4.6H16M8.5 3.5c-.8 1 .8 1.8 0 3M12 3.5c-.8 1 .8 1.8 0 3"/>' },
+  { name: "листочок", svg: '<path d="M5 19C5 10 10 5 19.5 4.5 19 14 14 19 5 19Z"/><path d="M5 19l8.5-8.5"/>' },
+  { name: "квітка", svg: '<circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="6.6" r="3"/><circle cx="17.4" cy="12" r="3"/><circle cx="12" cy="17.4" r="3"/><circle cx="6.6" cy="12" r="3"/>' },
+  { name: "подарунок", svg: '<rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7M12 8v12M12 8C10.5 5 7 4.6 7.5 7c.3 1.3 2.6 1 4.5 1Zm0 0c1.5-3 5-3.4 4.5-1-.3 1.3-2.6 1-4.5 1Z"/>' },
+  { name: "нотка", svg: '<path d="M9 17.5V5.5l10-2v12"/><circle cx="7" cy="17.5" r="2"/><circle cx="17" cy="15.5" r="2"/>' },
+  { name: "парасолька", svg: '<path d="M3 12a9 9 0 0 1 18 0Z"/><path d="M12 12v6.5a2 2 0 0 1-4 0M12 3v.5"/>' },
+  { name: "кулька", svg: '<ellipse cx="12" cy="9.5" rx="5.5" ry="6.5"/><path d="M12 16l-1.2 1.6h2.4Z"/><path d="M12 17.6c0 2-1.8 2.2-1 4"/>' },
+  { name: "книжка", svg: '<path d="M12 6.5C10.3 5 7.5 4.5 4 4.5v13.5c3.5 0 6.3.5 8 2M12 6.5c1.7-1.5 4.5-2 8-2v13.5c-3.5 0-6.3.5-8 2M12 6.5v13.5"/>' },
+];
+
+function pickHeroIcon() {
+  const night = dayPart() === "evening" || dayPart() === "night";
+  const pool = HERO_ICONS.filter((i) => !i.when || (i.when === "night") === night);
+  let last = null;
+  try { last = localStorage.getItem("heroIcon"); } catch (_) {}
+  const options = pool.filter((i) => i.name !== last);
+  const icon = options[Math.floor(Math.random() * options.length)];
+  try { localStorage.setItem("heroIcon", icon.name); } catch (_) {}
+  const el = $("heroIcon");
+  el.innerHTML = icon.svg;
+  el.setAttribute("data-name", icon.name);
+  el.style.animation = "none"; void el.getBoundingClientRect(); el.style.animation = "";
+}
+
 /* Фраза дня: спокійна, без тиску. Залежить від дати — протягом дня не змінюється. */
 const MOTTOS = [
   "Не обовʼязково встигнути все. Достатньо зробити перший крок.",
@@ -526,6 +562,7 @@ showPage(savedPage === "calendar" ? "calendar" : "today");
 /* ---------- старт ---------- */
 async function init() {
   pickGreeting();
+  pickHeroIcon();
   try {
     const me = await api("GET", "/api/me");
     const dayChanged = state.today && state.today !== me.today;
