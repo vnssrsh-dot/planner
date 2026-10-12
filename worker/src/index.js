@@ -20,7 +20,7 @@ async function setup(env, store, origin) {
       ],
     }),
     menu: await tg(env, "setChatMenuButton", {
-      menu_button: { type: "web_app", text: "Ritmoza", web_app: { url: origin } },
+      menu_button: { type: "web_app", text: "Відкрити Ritmoza", web_app: { url: origin } },
     }),
     short: await tg(env, "setMyShortDescription", {
       short_description: "Ritmoza — плануй · живи · розвивайся. Справи, календар і звички в Telegram.",

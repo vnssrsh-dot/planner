@@ -46,7 +46,7 @@ async def main() -> None:
         log.warning("Не вдалося оновити опис бота")
     if cfg.webapp_url:
         await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(text="Ritmoza", web_app=WebAppInfo(url=cfg.webapp_url))
+            menu_button=MenuButtonWebApp(text="Відкрити Ritmoza", web_app=WebAppInfo(url=cfg.webapp_url))
         )
     else:
         log.warning("WEBAPP_URL не задан — Mini App будет недоступна из Telegram")
