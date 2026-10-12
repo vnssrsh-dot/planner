@@ -1,7 +1,9 @@
 // Обробка оновлень від Telegram (вебхук): команди та кнопки.
 import { localNow, addDays, humanDay } from "./time.js";
 import { tg } from "./telegram.js";
-import { dayText, tasksKeyboard, habitsText, habitsKeyboard, openKeyboard, esc } from "./views.js";
+import { dayText, tasksKeyboard, habitsText, habitsKeyboard, openKeyboard, ownerStatsText, esc } from "./views.js";
+
+const OWNER_COMMAND = "rtmz_pulse";
 
 async function today(store, env, uid) {
   const user = await store.getUser(uid);
@@ -33,6 +35,19 @@ async function onMessage(env, store, msg, webappUrl) {
   if (!m) return;
   const [, cmd, args = ""] = m;
   await store.upsertUser(u.id, { chatId: msg.chat.id, firstName: u.first_name });
+
+  // Прихована команда для власника: немає в меню, чужим бот не відповідає
+  if (cmd === OWNER_COMMAND) {
+    if (!env.ADMIN_ID) {
+      await tg(env, "sendMessage", {
+        chat_id: msg.chat.id, parse_mode: "HTML",
+        text: `Ваш Telegram ID: <code>${u.id}</code>\nДодайте його в Cloudflare → Settings → Variables and Secrets як <b>ADMIN_ID</b>, і команда запрацює лише для вас.`,
+      });
+    } else if (String(u.id) === String(env.ADMIN_ID).trim()) {
+      await tg(env, "sendMessage", { chat_id: msg.chat.id, parse_mode: "HTML", text: ownerStatsText(await store.ownerStats()) });
+    }
+    return;
+  }
 
   if (cmd === "start") {
     await tg(env, "sendMessage", {

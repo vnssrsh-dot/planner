@@ -3,7 +3,8 @@
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
      id INTEGER PRIMARY KEY, chat_id INTEGER, first_name TEXT, tz TEXT, last_evening_date TEXT,
-     last_morning_date TEXT, created_date TEXT, welcome_sent INTEGER NOT NULL DEFAULT 0, started_at TEXT)`,
+     last_morning_date TEXT, created_date TEXT, welcome_sent INTEGER NOT NULL DEFAULT 0, started_at TEXT,
+     last_seen_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS tasks (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, time TEXT,
      title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, done_at TEXT,
@@ -23,7 +24,7 @@ export async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
   // база, створена до появи ранкової зведення, — додаємо колонку (якщо вже є, SQLite поверне помилку)
-  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT"]) {
+  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT", "last_seen_at TEXT"]) {
     try { await db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run(); } catch {}
   }
   schemaReady = true;
@@ -50,12 +51,13 @@ export class Store {
   // ---------- users ----------
   async upsertUser(id, { chatId = null, firstName = null, tz = null } = {}) {
     await this.q(
-      `INSERT INTO users (id, chat_id, first_name, tz, created_date) VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO users (id, chat_id, first_name, tz, created_date, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          chat_id = COALESCE(excluded.chat_id, users.chat_id),
          first_name = COALESCE(excluded.first_name, users.first_name),
-         tz = COALESCE(excluded.tz, users.tz)`,
-      id, chatId, firstName, tz, new Date().toISOString().slice(0, 10),
+         tz = COALESCE(excluded.tz, users.tz),
+         last_seen_at = excluded.last_seen_at`,
+      id, chatId, firstName, tz, new Date().toISOString().slice(0, 10), new Date().toISOString(),
     ).run();
   }
   getUser(id) { return this.q("SELECT * FROM users WHERE id = ?", id).first(); }
@@ -74,6 +76,37 @@ export class Store {
   }
   setLastMorning(id, day) { return this.q("UPDATE users SET last_morning_date = ? WHERE id = ?", day, id).run(); }
   setLastEvening(id, day) { return this.q("UPDATE users SET last_evening_date = ? WHERE id = ?", day, id).run(); }
+
+  // ---------- статистика для власника (лише кількості, без змісту справ) ----------
+  async ownerStats() {
+    const iso = (ms) => new Date(Date.now() - ms).toISOString();
+    const day = iso(864e5), week = iso(7 * 864e5);
+    const dayDate = day.slice(0, 10);
+    const n = async (sql, ...args) => (await this.q(sql, ...args).first())?.n ?? 0;
+    const USING = "(EXISTS(SELECT 1 FROM tasks t WHERE t.user_id = u.id) OR EXISTS(SELECT 1 FROM habits h WHERE h.user_id = u.id))";
+    const [total, newDay, newWeek, using, activeDay, activeWeek, invited, invitedUsing,
+      tasksTotal, tasksDay, doneDay, habitsTotal, habitUsers, marksDay] = await Promise.all([
+      n("SELECT COUNT(*) AS n FROM users"),
+      n("SELECT COUNT(*) AS n FROM users WHERE COALESCE(started_at, created_date) >= ?", day),
+      n("SELECT COUNT(*) AS n FROM users WHERE COALESCE(started_at, created_date) >= ?", week),
+      n(`SELECT COUNT(*) AS n FROM users u WHERE ${USING}`),
+      n("SELECT COUNT(*) AS n FROM users WHERE last_seen_at >= ?", day),
+      n("SELECT COUNT(*) AS n FROM users WHERE last_seen_at >= ?", week),
+      n("SELECT COUNT(*) AS n FROM users WHERE welcome_sent = 1 AND started_at IS NOT NULL"),
+      n(`SELECT COUNT(*) AS n FROM users u WHERE welcome_sent = 1 AND started_at IS NOT NULL AND ${USING}`),
+      n("SELECT COUNT(*) AS n FROM tasks"),
+      n("SELECT COUNT(*) AS n FROM tasks WHERE created_at >= ?", day),
+      n("SELECT COUNT(*) AS n FROM tasks WHERE done = 1 AND done_at >= ?", day),
+      n("SELECT COUNT(*) AS n FROM habits"),
+      n("SELECT COUNT(DISTINCT user_id) AS n FROM habits"),
+      n("SELECT COUNT(*) AS n FROM habit_marks WHERE date >= ?", dayDate),
+    ]);
+    const recent = await this.all(
+      `SELECT u.first_name, COALESCE(u.started_at, u.created_date) AS joined, ${USING} AS is_using
+       FROM users u ORDER BY joined DESC LIMIT 10`);
+    return { total, newDay, newWeek, using, activeDay, activeWeek, invited, invitedUsing,
+      tasksTotal, tasksDay, doneDay, habitsTotal, habitUsers, marksDay, recent };
+  }
 
   // ---------- tasks ----------
   async tasksBetween(uid, from, to) {

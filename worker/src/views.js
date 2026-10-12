@@ -162,3 +162,36 @@ export function eveningText(tasks, habits, tomorrowEmpty) {
   if (!open.length && tasks.length) blocks.unshift("Усе заплановане на сьогодні виконано 🎉");
   return ["<b>Підсумки дня</b> 🌙", ...blocks].join("\n\n");
 }
+
+// ---------- статистика для власника ----------
+const KYIV = new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+export function ownerStatsText(s) {
+  const pct = (a, b) => (b ? ` (${Math.round((a / b) * 100)}%)` : "");
+  const joined = (v) => {
+    if (!v) return "—";
+    const d = new Date(v.length === 10 ? v + "T12:00:00Z" : v);
+    return v.length === 10 ? KYIV.format(d).split(",")[0] : KYIV.format(d);
+  };
+  const lines = [
+    "<b>Ritmoza · пульс</b>",
+    "",
+    "<b>Люди</b>",
+    `👥 Запустили бота: ${s.total}`,
+    `🆕 Нових за 24 год: ${s.newDay} · за 7 днів: ${s.newWeek}`,
+    `✍️ Почали користуватися: ${s.using}${pct(s.using, s.total)}`,
+    `🔥 Активні за 24 год: ${s.activeDay} · за 7 днів: ${s.activeWeek}`,
+    `📨 Отримали запрошення: ${s.invited} → почали користуватися: ${s.invitedUsing}${pct(s.invitedUsing, s.invited)}`,
+    "",
+    "<b>Планер</b>",
+    `📅 Справ усього: ${s.tasksTotal} · додано за 24 год: ${s.tasksDay}`,
+    `✅ Виконано за 24 год: ${s.doneDay}`,
+    `🔁 Звичок: ${s.habitsTotal} у ${s.habitUsers} ${s.habitUsers === 1 ? "людини" : "людей"} · відміток за добу: ${s.marksDay}`,
+  ];
+  if (s.recent.length) {
+    lines.push("", "<b>Останні, хто приєднався</b>");
+    for (const r of s.recent) lines.push(`${r.is_using ? "✍️" : "·"} ${esc(r.first_name || "без імені")} — ${joined(r.joined)}`);
+    lines.push("", "<i>✍️ — уже користується планером. Час — київський.</i>");
+  }
+  return lines.join("\n");
+}
