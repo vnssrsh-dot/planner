@@ -103,10 +103,70 @@ function plural(n, one, few, many) {
   return many;
 }
 
+/* Фрази привітання за часом доби. {name} — імʼя; без імені фраза скорочується. */
+const GREETINGS = {
+  morning: [ // 05:00–11:59
+    "Доброго ранку, {name}",
+    "Гарного ранку, {name}",
+    "Ранок добрий, {name}",
+    "З новим днем, {name}",
+    "Прокидаємось, {name}",
+    "Кава й план — і вперед, {name}",
+    "Новий день — нові можливості, {name}",
+  ],
+  day: [ // 12:00–17:59
+    "Добрий день, {name}",
+    "Гарного дня, {name}",
+    "Як минає день, {name}?",
+    "Вітаю, {name}",
+    "Продуктивного дня, {name}",
+    "Тримаємо темп, {name}",
+    "Половина дня позаду, {name}",
+  ],
+  evening: [ // 18:00–22:59
+    "Добрий вечір, {name}",
+    "Гарного вечора, {name}",
+    "Час підбити підсумки, {name}",
+    "Ще трохи — і відпочинок, {name}",
+    "Затишного вечора, {name}",
+    "Як пройшов день, {name}?",
+  ],
+  night: [ // 23:00–04:59
+    "Доброї ночі, {name}",
+    "Не спиться, {name}?",
+    "Пізно вже, {name}",
+    "Час відпочивати, {name}",
+    "Тихої ночі, {name}",
+  ],
+};
+
+function dayPart(h = new Date().getHours()) {
+  if (h >= 5 && h < 12) return "morning";
+  if (h >= 12 && h < 18) return "day";
+  if (h >= 18 && h < 23) return "evening";
+  return "night";
+}
+
+function fillName(phrase, name) {
+  if (name) return phrase.replace("{name}", name);
+  return phrase.replace(/,?\s*\{name\}/, "").replace(/\s+([?!.])$/, "$1");
+}
+
+// Фраза обирається випадково один раз на частину доби (щоб не мигтіла при кожному оновленні)
+// і не повторює попередню.
+const greetingCache = { part: null, phrase: null };
 function greeting() {
-  const h = new Date().getHours();
-  const hi = h >= 5 && h < 12 ? "Доброго ранку" : h < 18 && h >= 12 ? "Добрий день" : h >= 18 && h < 23 ? "Добрий вечір" : "Доброї ночі";
-  return state.name ? `${hi}, ${state.name}` : hi;
+  const part = dayPart();
+  if (greetingCache.part !== part) {
+    const pool = GREETINGS[part];
+    let last = null;
+    try { last = localStorage.getItem("greeting"); } catch (_) {}
+    const options = pool.length > 1 ? pool.filter((p) => p !== last) : pool;
+    greetingCache.part = part;
+    greetingCache.phrase = options[Math.floor(Math.random() * options.length)];
+    try { localStorage.setItem("greeting", greetingCache.phrase); } catch (_) {}
+  }
+  return fillName(greetingCache.phrase, state.name);
 }
 
 // Спільний список справ дня: відкриті, порожній стан, згорнуті виконані
