@@ -5,3 +5,8 @@ venv/
 .env
 *.db
 *.db-journal
+
+# Cloudflare
+worker/.wrangler/
+worker/node_modules/
+worker/.dev.vars
