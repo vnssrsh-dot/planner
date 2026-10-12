@@ -9,7 +9,32 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <main class="app">
+  <!-- Сторінка 1: нагадувалка на сьогодні -->
+  <main class="app page" id="page-today">
+    <header class="hello">
+      <h1 id="greeting">Привіт</h1>
+      <div class="hello-date" id="todayDate"></div>
+      <div class="summary" id="summary"></div>
+      <div class="bar" id="summaryBar" hidden><i></i></div>
+    </header>
+
+    <section class="overdue" id="t-overdue" hidden>
+      <div class="section-title urgent">Не виконано раніше</div>
+      <ul class="list" id="t-overdueList"></ul>
+    </section>
+
+    <div class="section-title" id="t-listTitle" hidden>Справи на сьогодні</div>
+    <ul class="list" id="t-taskList"></ul>
+    <div class="empty" id="t-empty" hidden></div>
+
+    <details class="done-block" id="t-doneBlock" hidden>
+      <summary id="t-doneSummary"></summary>
+      <ul class="list" id="t-doneList"></ul>
+    </details>
+  </main>
+
+  <!-- Сторінка 2: календар -->
+  <main class="app page" id="page-calendar" hidden>
     <section class="calendar card">
       <header class="cal-head">
         <button class="icon-btn" id="prevMonth" aria-label="Попередній місяць">‹</button>
@@ -23,34 +48,39 @@
       <button class="today-link" id="gotoToday" hidden>Повернутися до сьогодні</button>
     </section>
 
-    <section class="day">
-      <header class="day-head">
-        <div>
-          <div class="day-label" id="dayLabel"></div>
-          <h2 id="dayTitle"></h2>
-        </div>
-        <div class="progress" id="progress" hidden>
-          <svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="bar" id="progressBar" cx="18" cy="18" r="15"/></svg>
-          <span id="progressText"></span>
-        </div>
-      </header>
-
-      <div class="overdue card" id="overdue" hidden>
-        <div class="overdue-title">Не виконано раніше</div>
-        <ul id="overdueList" class="list"></ul>
+    <header class="day-head">
+      <div>
+        <div class="day-label" id="dayLabel"></div>
+        <h2 id="dayTitle"></h2>
       </div>
+      <div class="progress" id="progress" hidden>
+        <svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="ring" id="progressBar" cx="18" cy="18" r="15"/></svg>
+        <span id="progressText"></span>
+      </div>
+    </header>
 
-      <ul id="taskList" class="list"></ul>
-      <div class="empty" id="empty" hidden></div>
+    <ul class="list" id="c-taskList"></ul>
+    <div class="empty" id="c-empty" hidden></div>
 
-      <details class="done-block" id="doneBlock" hidden>
-        <summary id="doneSummary"></summary>
-        <ul id="doneList" class="list"></ul>
-      </details>
-    </section>
+    <details class="done-block" id="c-doneBlock" hidden>
+      <summary id="c-doneSummary"></summary>
+      <ul class="list" id="c-doneList"></ul>
+    </details>
   </main>
 
   <button class="fab" id="addBtn" aria-label="Додати завдання">+</button>
+
+  <nav class="tabbar">
+    <button class="tab" data-page="today" aria-label="Сьогодні">
+      <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>
+      <span>Сьогодні</span>
+      <b class="badge" id="todayBadge" hidden></b>
+    </button>
+    <button class="tab" data-page="calendar" aria-label="Календар">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+      <span>Календар</span>
+    </button>
+  </nav>
 
   <div class="sheet-backdrop" id="backdrop" hidden></div>
   <form class="sheet" id="sheet" hidden autocomplete="off">

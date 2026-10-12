@@ -94,7 +94,9 @@ async def me(request: web.Request):
     db, cfg = request.app[DB_KEY], request.app[CFG_KEY]
     user = await db.get_user(request["user_id"])
     now = local_now(user["tz"], cfg.default_tz)
-    return web.json_response({"today": now.date().isoformat(), "tz": now.tzinfo.key})
+    return web.json_response({
+        "today": now.date().isoformat(), "tz": now.tzinfo.key, "first_name": user["first_name"] or "",
+    })
 
 
 @routes.get("/api/tasks")

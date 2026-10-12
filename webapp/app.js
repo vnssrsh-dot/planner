@@ -19,6 +19,9 @@ const state = {
   view: { y: 0, m: 0 }, // місяць, що відображається
   byDate: {},           // date -> [task]
   overdue: [],
+  todayTasks: [],
+  name: "",
+  page: "today",
   editing: null,        // завдання, що редагується, або null
 };
 
@@ -76,17 +79,79 @@ async function loadMonth() {
   for (const t of tasks) (state.byDate[t.date] ||= []).push(t);
 }
 
-async function loadOverdue() {
-  state.overdue = await api("GET", `/api/overdue?today=${state.today}`);
+async function loadToday() {
+  const [tasks, overdue] = await Promise.all([
+    api("GET", `/api/tasks?from=${state.today}&to=${state.today}`),
+    api("GET", `/api/overdue?today=${state.today}`),
+  ]);
+  state.todayTasks = tasks;
+  state.overdue = overdue;
 }
 
 async function reload() {
-  await Promise.all([loadMonth(), loadOverdue()]);
+  await Promise.all([loadMonth(), loadToday()]);
   render();
 }
 
 /* ---------- відображення ---------- */
-function render() { renderCalendar(); renderDay(); }
+function render() { renderToday(); renderCalendar(); renderCalendarDay(); }
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  const hi = h >= 5 && h < 12 ? "Доброго ранку" : h < 18 && h >= 12 ? "Добрий день" : h >= 18 && h < 23 ? "Добрий вечір" : "Доброї ночі";
+  return state.name ? `${hi}, ${state.name}` : hi;
+}
+
+// Спільний список справ дня: відкриті, порожній стан, згорнуті виконані
+function renderDayList(prefix, ds, tasks) {
+  const isToday = ds === state.today;
+  const open = tasks.filter((t) => !t.done);
+  const done = tasks.filter((t) => t.done);
+  const late = (t) => (isToday && t.time && t.time < nowHM()) || ds < state.today;
+
+  $(`${prefix}-taskList`).replaceChildren(...open.map((t) => taskRow(t, { late: late(t) })));
+  $(`${prefix}-doneList`).replaceChildren(...done.map((t) => taskRow(t)));
+  $(`${prefix}-doneBlock`).hidden = !done.length;
+  $(`${prefix}-doneSummary`).textContent = `Виконано · ${done.length}`;
+
+  const empty = $(`${prefix}-empty`);
+  empty.hidden = open.length > 0;
+  empty.textContent = tasks.length ? "Усе виконано" : isToday ? "На сьогодні планів немає" : "Нічого не заплановано";
+  return { open, done };
+}
+
+function renderToday() {
+  const tasks = state.todayTasks;
+  $("greeting").textContent = greeting();
+  $("todayDate").textContent = `${weekday(state.today)}, ${human(state.today)}`;
+
+  const { open, done } = renderDayList("t", state.today, tasks);
+  const n = tasks.length;
+  $("summary").textContent = !n
+    ? "Можна відпочити або запланувати щось нове."
+    : !open.length
+      ? `Усі ${n} ${plural(n, "справу", "справи", "справ")} виконано. Чудовий день!`
+      : `На сьогодні ${open.length === n ? "" : "залишилось "}${open.length} ${plural(open.length, "справа", "справи", "справ")}` +
+        (done.length ? ` з ${n}` : "") + ".";
+  $("summaryBar").hidden = !n;
+  $("summaryBar").firstElementChild.style.width = n ? `${(done.length / n) * 100}%` : "0";
+  $("t-listTitle").hidden = !open.length;
+
+  const showOverdue = state.overdue.length > 0;
+  $("t-overdue").hidden = !showOverdue;
+  $("t-overdueList").replaceChildren(...state.overdue.map((t) => taskRow(t, { overdue: true })));
+
+  const badge = $("todayBadge");
+  badge.hidden = !open.length;
+  badge.textContent = open.length;
+}
 
 function renderCalendar() {
   $("monthTitle").textContent = `${MONTHS[state.view.m]} ${state.view.y}`;
@@ -120,7 +185,7 @@ function renderCalendar() {
   $("gotoToday").hidden = viewingToday;
 }
 
-function renderDay() {
+function renderCalendarDay() {
   const ds = state.selected;
   const isToday = ds === state.today;
   const rel = isToday ? "Сьогодні" : ds === addDays(state.today, 1) ? "Завтра" : ds === addDays(state.today, -1) ? "Вчора" : weekday(ds);
@@ -128,10 +193,8 @@ function renderDay() {
   $("dayTitle").textContent = isToday ? `${weekday(ds)}, ${human(ds)}` : human(ds);
 
   const tasks = state.byDate[ds] || [];
-  const open = tasks.filter((t) => !t.done);
-  const done = tasks.filter((t) => t.done);
+  const { done } = renderDayList("c", ds, tasks);
 
-  // прогрес
   $("progress").hidden = !tasks.length;
   if (tasks.length) {
     const c = 2 * Math.PI * 15;
@@ -139,25 +202,6 @@ function renderDay() {
     bar.style.strokeDasharray = c;
     bar.style.strokeDashoffset = c * (1 - done.length / tasks.length);
     $("progressText").textContent = `${done.length}/${tasks.length}`;
-  }
-
-  // невиконане з минулих днів (лише на сьогодні)
-  const showOverdue = isToday && state.overdue.length > 0;
-  $("overdue").hidden = !showOverdue;
-  $("overdueList").replaceChildren(...(showOverdue ? state.overdue.map((t) => taskRow(t, { overdue: true })) : []));
-
-  $("taskList").replaceChildren(...open.map((t) => taskRow(t, { late: isToday && t.time && t.time < nowHM() || ds < state.today })));
-  $("doneList").replaceChildren(...done.map((t) => taskRow(t)));
-  $("doneBlock").hidden = !done.length;
-  $("doneSummary").textContent = `Виконано · ${done.length}`;
-
-  const empty = $("empty");
-  empty.hidden = open.length > 0;
-  if (!open.length) {
-    empty.textContent = tasks.length
-      ? `Усе виконано`
-      : isToday ? `На сьогодні планів немає`
-      : `Нічого не заплановано`;
   }
 }
 
@@ -257,7 +301,7 @@ function openSheet(task) {
   state.editing = task || null;
   $("sheetTitle").textContent = task ? "Редагувати" : "Нове завдання";
   form.elements.title.value = task?.title || "";
-  form.elements.date.value = task?.date || state.selected;
+  form.elements.date.value = task?.date || (state.page === "calendar" ? state.selected : state.today);
   form.elements.time.value = task?.time || "";
   form.elements.note.value = task?.note || "";
   $("deleteBtn").hidden = !task;
@@ -289,7 +333,7 @@ form.onsubmit = async (e) => {
     else await api("POST", "/api/tasks", data);
     haptic("success");
     closeSheet();
-    if (data.date !== state.selected) selectDay(data.date);
+    if (state.page === "calendar" && data.date !== state.selected) selectDay(data.date);
     await reload();
   } catch (err) { showError(err); }
   finally { $("saveBtn").disabled = false; }
@@ -314,12 +358,26 @@ $("prevMonth").onclick = () => shiftMonth(-1);
 $("nextMonth").onclick = () => shiftMonth(1);
 $("gotoToday").onclick = () => selectDay(state.today);
 
+/* ---------- нижнє меню ---------- */
+function showPage(page) {
+  state.page = page;
+  for (const p of ["today", "calendar"]) $(`page-${p}`).hidden = p !== page;
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  try { localStorage.setItem("page", page); } catch (_) {}
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".tab").forEach((b) => (b.onclick = () => { if (state.page !== b.dataset.page) { haptic("light"); showPage(b.dataset.page); } }));
+let savedPage = "today";
+try { savedPage = localStorage.getItem("page") || "today"; } catch (_) {}
+showPage(savedPage === "calendar" ? "calendar" : "today");
+
 /* ---------- старт ---------- */
 async function init() {
   try {
     const me = await api("GET", "/api/me");
     const dayChanged = state.today && state.today !== me.today;
     state.today = me.today;
+    state.name = tg?.initDataUnsafe?.user?.first_name || me.first_name || "";
     if (!state.selected || dayChanged) {
       state.selected = me.today;
       const d = toDate(me.today);

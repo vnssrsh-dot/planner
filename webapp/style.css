@@ -18,13 +18,21 @@
 html, body { margin: 0; background: var(--bg); color: var(--text); }
 body {
   font: 15px/1.45 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  padding-bottom: 96px;
+  padding-bottom: calc(150px + env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 
 .app { max-width: 560px; margin: 0 auto; padding: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* ---------- сторінка «Сьогодні» ---------- */
+.hello { padding: 20px 2px 28px; }
+.hello h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.hello-date { margin-top: 4px; color: var(--muted); font-size: 14px; }
+.summary { margin-top: 18px; font-size: 15px; }
+.bar { margin-top: 10px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--done); border-radius: 2px; transition: width .4s; }
 
 /* ---------- календар ---------- */
 .calendar { padding: 12px 10px 10px; }
@@ -62,12 +70,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .progress svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .progress circle { fill: none; stroke-width: 2; }
 .progress .track { stroke: var(--line); }
-.progress .bar { stroke: var(--done); stroke-linecap: round; transition: stroke-dashoffset .4s; }
+.progress .ring { stroke: var(--done); stroke-linecap: round; transition: stroke-dashoffset .4s; }
 .progress span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.list { list-style: none; margin: 0; padding: 0; }
-#taskList, #doneList, #overdueList { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-#taskList:empty, #doneList:empty { display: none; }
+.list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.list:empty { display: none; }
 
 .task {
   display: flex; align-items: center; gap: 12px; padding: 13px 14px;
@@ -94,9 +101,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .time.late { color: var(--urgent); }
 .task.done .time { color: var(--inactive); }
 
-.overdue { background: none; border: 0; margin-bottom: 16px; }
-.overdue-title { font-size: 12px; color: var(--urgent); text-transform: uppercase; letter-spacing: .06em; padding: 0 2px 8px; }
-#overdueList .check { border-color: var(--urgent); }
+.overdue { margin-bottom: 24px; }
+.section-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 0 2px 8px; }
+.section-title.urgent { color: var(--urgent); }
+.overdue .check { border-color: var(--urgent); }
 .move-btn { flex: none; font-size: 13px; color: var(--accent); padding: 4px 0 4px 8px; }
 
 .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 36px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
@@ -107,7 +115,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- кнопка додавання ---------- */
 .fab {
-  position: fixed; right: max(16px, calc(50% - 264px)); bottom: calc(24px + env(safe-area-inset-bottom));
+  position: fixed; right: max(16px, calc(50% - 264px)); bottom: calc(76px + env(safe-area-inset-bottom));
   width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: #fff;
   font-size: 26px; font-weight: 300; line-height: 1;
 }
@@ -142,10 +150,27 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- тост ---------- */
 .toast {
-  position: fixed; left: 16px; right: 16px; bottom: calc(90px + env(safe-area-inset-bottom)); z-index: 20;
+  position: fixed; left: 16px; right: 16px; bottom: calc(140px + env(safe-area-inset-bottom)); z-index: 20;
   max-width: 528px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   background: var(--text); color: #fff; padding: 11px 14px; border-radius: 10px; font-size: 14px;
   animation: up .2s ease-out;
 }
 .toast button { color: var(--accent-soft); font-weight: 500; }
+/* ---------- нижнє меню ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; justify-content: center;
+  background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  position: relative; flex: 1; max-width: 280px; height: 58px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px; color: var(--inactive); font-size: 11px; letter-spacing: .02em;
+}
+.tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.tab svg circle[r="1.2"] { fill: currentColor; stroke: none; }
+.tab.active { color: var(--accent); }
+.badge {
+  position: absolute; top: 7px; left: calc(50% + 8px); min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; line-height: 16px;
+}
+
 [hidden] { display: none !important; }
