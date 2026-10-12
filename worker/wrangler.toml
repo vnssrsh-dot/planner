@@ -3,6 +3,8 @@
 name = "ritmoza"
 main = "src/index.js"
 compatibility_date = "2025-10-01"
+# Не стирати змінні, додані вручну в Cloudflare (напр. ADMIN_ID), під час deploy з GitHub
+keep_vars = true
 
 # Mini App: файли інтерфейсу віддаються як статичні ресурси
 [assets]
@@ -23,4 +25,4 @@ DEFAULT_TZ = "Europe/Kyiv"
 MORNING_HOUR = "9"
 EVENING_HOUR = "21"
 REMIND_BEFORE_MIN = "15"
-# BOT_TOKEN задається як секрет (Settings → Variables and Secrets), не тут!
+# BOT_TOKEN і ADMIN_ID задаються як секрети (Settings → Variables and Secrets), не тут!
