@@ -234,6 +234,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   width: 100%; font: inherit; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; outline: none; resize: none;
 }
+/* iPhone збільшує екран, якщо шрифт у полі менший за 16px — тримаємо рівно 16px */
+input, textarea, select { font-size: 16px !important; }
 .field input::placeholder, .field textarea::placeholder { color: var(--inactive); }
 .field input:focus, .field textarea:focus { border-color: var(--accent); background: var(--card); }
 .row { display: flex; gap: 10px; }
