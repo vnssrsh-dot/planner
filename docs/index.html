@@ -223,6 +223,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-width: 560px; margin: 0 auto;
   background: var(--card); border-radius: 16px 16px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
   animation: up .2s ease-out;
+  /* коли відкрита клавіатура (особливо на Android), форма не виходить за екран — її можна гортати */
+  max-height: 92vh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
 }
 @keyframes up { from { transform: translateY(100%); } }
 .sheet-grip { width: 32px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 12px; }
@@ -1297,6 +1299,10 @@ function syncHabitKind() {
   hform.elements.title.placeholder = quit ? "Наприклад, курити або гортати стрічку" : "Наприклад, пити 2 л води";
 }
 hform.querySelectorAll("input[name=kind]").forEach((r) => (r.onchange = syncHabitKind));
+
+// Android: після появи клавіатури підкручуємо активне поле у видиму частину форми
+document.querySelectorAll(".sheet input, .sheet textarea").forEach((el) =>
+  el.addEventListener("focus", () => setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 300)));
 
 function openHabitSheet(h) {
   state.editingHabit = h || null;

@@ -688,6 +688,10 @@ function syncHabitKind() {
 }
 hform.querySelectorAll("input[name=kind]").forEach((r) => (r.onchange = syncHabitKind));
 
+// Android: після появи клавіатури підкручуємо активне поле у видиму частину форми
+document.querySelectorAll(".sheet input, .sheet textarea").forEach((el) =>
+  el.addEventListener("focus", () => setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 300)));
+
 function openHabitSheet(h) {
   state.editingHabit = h || null;
   $("habitSheetTitle").textContent = h ? "Редагувати звичку" : "Нова звичка";
