@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Планер дел</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="calendar card">
+      <header class="cal-head">
+        <button class="icon-btn" id="prevMonth" aria-label="Предыдущий месяц">‹</button>
+        <h1 id="monthTitle"></h1>
+        <button class="icon-btn" id="nextMonth" aria-label="Следующий месяц">›</button>
+      </header>
+      <div class="weekdays">
+        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+      </div>
+      <div class="grid" id="grid"></div>
+      <button class="today-link" id="gotoToday" hidden>Вернуться к сегодня</button>
+    </section>
+
+    <section class="day">
+      <header class="day-head">
+        <div>
+          <div class="day-label" id="dayLabel"></div>
+          <h2 id="dayTitle"></h2>
+        </div>
+        <div class="progress" id="progress" hidden>
+          <svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="bar" id="progressBar" cx="18" cy="18" r="15"/></svg>
+          <span id="progressText"></span>
+        </div>
+      </header>
+
+      <div class="overdue card" id="overdue" hidden>
+        <div class="overdue-title">⚠️ Не сделано в прошлые дни</div>
+        <ul id="overdueList" class="list"></ul>
+      </div>
+
+      <ul id="taskList" class="list"></ul>
+      <div class="empty" id="empty" hidden></div>
+
+      <details class="done-block" id="doneBlock" hidden>
+        <summary id="doneSummary"></summary>
+        <ul id="doneList" class="list"></ul>
+      </details>
+    </section>
+  </main>
+
+  <button class="fab" id="addBtn" aria-label="Добавить задачу">+</button>
+
+  <div class="sheet-backdrop" id="backdrop" hidden></div>
+  <form class="sheet" id="sheet" hidden autocomplete="off">
+    <div class="sheet-grip"></div>
+    <h3 id="sheetTitle">Новая задача</h3>
+    <label class="field">
+      <span>Что нужно сделать</span>
+      <input name="title" maxlength="200" required placeholder="Например, позвонить маме">
+    </label>
+    <div class="row">
+      <label class="field"><span>Дата</span><input type="date" name="date" required></label>
+      <label class="field"><span>Время <i>(необязательно)</i></span><input type="time" name="time"></label>
+    </div>
+    <label class="field">
+      <span>Заметка</span>
+      <textarea name="note" rows="2" maxlength="1000" placeholder="Детали, адрес, ссылка…"></textarea>
+    </label>
+    <div class="sheet-actions">
+      <button type="button" class="btn danger" id="deleteBtn" hidden>Удалить</button>
+      <button type="button" class="btn ghost" id="cancelBtn">Отмена</button>
+      <button type="submit" class="btn primary" id="saveBtn">Сохранить</button>
+    </div>
+  </form>
+
+  <div class="toast" id="toast" hidden><span id="toastText"></span><button id="toastUndo">Отменить</button></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

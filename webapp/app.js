@@ -1,0 +1,334 @@
+"use strict";
+
+const tg = window.Telegram?.WebApp;
+if (tg && tg.initData) {
+  document.documentElement.classList.add("tg");
+  tg.ready();
+  tg.expand();
+}
+
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  today: null,          // "YYYY-MM-DD" в часовом поясе пользователя
+  selected: null,
+  view: { y: 0, m: 0 }, // отображаемый месяц
+  byDate: {},           // date -> [task]
+  overdue: [],
+  editing: null,        // редактируемая задача или null
+};
+
+/* ---------- даты (строки YYYY-MM-DD, считаем в UTC, чтобы не ловить DST) ---------- */
+const toDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const toStr = (dt) => dt.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = toDate(s); d.setUTCDate(d.getUTCDate() + n); return toStr(d); };
+const pad = (n) => String(n).padStart(2, "0");
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const human = (s) => { const d = toDate(s); return `${d.getUTCDate()} ${MONTHS_GEN[d.getUTCMonth()]}`; };
+const weekday = (s) => WEEKDAYS[toDate(s).getUTCDay()];
+
+/* ---------- API ---------- */
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": tg?.initData || "",
+      "X-Timezone": TZ,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+function haptic(kind) {
+  try {
+    if (kind === "success") tg?.HapticFeedback?.notificationOccurred("success");
+    else tg?.HapticFeedback?.impactOccurred(kind || "light");
+  } catch (_) {}
+}
+
+function showError(e) {
+  console.error(e);
+  const msg = String(e.message).startsWith("401")
+    ? "Откройте планер через кнопку в боте Telegram."
+    : "Не удалось связаться с сервером. Попробуйте ещё раз.";
+  tg?.showAlert ? tg.showAlert(msg) : alert(msg);
+}
+
+/* ---------- загрузка ---------- */
+function gridRange() {
+  const first = new Date(Date.UTC(state.view.y, state.view.m, 1));
+  const shift = (first.getUTCDay() + 6) % 7; // понедельник — первый день
+  const start = addDays(toStr(first), -shift);
+  return { start, end: addDays(start, 41) };
+}
+
+async function loadMonth() {
+  const { start, end } = gridRange();
+  const tasks = await api("GET", `/api/tasks?from=${start}&to=${end}`);
+  state.byDate = {};
+  for (const t of tasks) (state.byDate[t.date] ||= []).push(t);
+}
+
+async function loadOverdue() {
+  state.overdue = await api("GET", `/api/overdue?today=${state.today}`);
+}
+
+async function reload() {
+  await Promise.all([loadMonth(), loadOverdue()]);
+  render();
+}
+
+/* ---------- отрисовка ---------- */
+function render() { renderCalendar(); renderDay(); }
+
+function renderCalendar() {
+  $("monthTitle").textContent = `${MONTHS[state.view.m]} ${state.view.y}`;
+  const { start } = gridRange();
+  const grid = $("grid");
+  grid.replaceChildren();
+  for (let i = 0; i < 42; i++) {
+    const ds = addDays(start, i);
+    const d = toDate(ds);
+    const cell = document.createElement("button");
+    cell.className = "cell";
+    if (d.getUTCMonth() !== state.view.m) cell.classList.add("other");
+    if (ds === state.today) cell.classList.add("today");
+    if (ds === state.selected) cell.classList.add("selected");
+    cell.innerHTML = `<span class="num">${d.getUTCDate()}</span><span class="dots"></span>`;
+
+    const tasks = state.byDate[ds] || [];
+    const open = tasks.filter((t) => !t.done);
+    const dots = cell.querySelector(".dots");
+    if (tasks.length && !open.length) {
+      dots.innerHTML = `<i class="dot done"></i>`;
+    } else {
+      const cls = ds < state.today ? "dot late" : "dot";
+      dots.innerHTML = open.slice(0, 3).map(() => `<i class="${cls}"></i>`).join("");
+    }
+    cell.onclick = () => selectDay(ds);
+    grid.append(cell);
+  }
+  const t = toDate(state.today);
+  const viewingToday = state.selected === state.today && t.getUTCMonth() === state.view.m && t.getUTCFullYear() === state.view.y;
+  $("gotoToday").hidden = viewingToday;
+}
+
+function renderDay() {
+  const ds = state.selected;
+  const isToday = ds === state.today;
+  const rel = isToday ? "Сегодня" : ds === addDays(state.today, 1) ? "Завтра" : ds === addDays(state.today, -1) ? "Вчера" : weekday(ds);
+  $("dayLabel").textContent = rel;
+  $("dayTitle").textContent = isToday ? `${weekday(ds)}, ${human(ds)}` : human(ds);
+
+  const tasks = state.byDate[ds] || [];
+  const open = tasks.filter((t) => !t.done);
+  const done = tasks.filter((t) => t.done);
+
+  // прогресс
+  $("progress").hidden = !tasks.length;
+  if (tasks.length) {
+    const c = 2 * Math.PI * 15;
+    const bar = $("progressBar");
+    bar.style.strokeDasharray = c;
+    bar.style.strokeDashoffset = c * (1 - done.length / tasks.length);
+    $("progressText").textContent = `${done.length}/${tasks.length}`;
+  }
+
+  // хвосты с прошлых дней (только на сегодня)
+  const showOverdue = isToday && state.overdue.length > 0;
+  $("overdue").hidden = !showOverdue;
+  $("overdueList").replaceChildren(...(showOverdue ? state.overdue.map((t) => taskRow(t, { overdue: true })) : []));
+
+  $("taskList").replaceChildren(...open.map((t) => taskRow(t, { late: isToday && t.time && t.time < nowHM() || ds < state.today })));
+  $("doneList").replaceChildren(...done.map((t) => taskRow(t)));
+  $("doneBlock").hidden = !done.length;
+  $("doneSummary").textContent = `Выполнено (${done.length})`;
+
+  const empty = $("empty");
+  empty.hidden = open.length > 0;
+  if (!open.length) {
+    empty.innerHTML = tasks.length
+      ? `<b>🎉</b>Всё выполнено!`
+      : isToday ? `<b>☀️</b>На сегодня планов нет.<br>Нажмите «+», чтобы добавить задачу.`
+      : `<b>🗓️</b>На этот день ничего не запланировано.`;
+  }
+}
+
+function taskRow(t, opts = {}) {
+  const li = document.createElement("li");
+  li.className = "task" + (t.done ? " done" : "");
+  li.dataset.id = t.id;
+
+  const check = document.createElement("button");
+  check.className = "check";
+  check.setAttribute("aria-label", t.done ? "Вернуть в работу" : "Отметить выполненной");
+  check.onclick = (e) => { e.stopPropagation(); toggleDone(t, li, check); };
+
+  const body = document.createElement("div");
+  body.className = "task-body";
+  const title = document.createElement("div");
+  title.className = "task-title";
+  title.textContent = t.title;
+  const meta = document.createElement("div");
+  meta.className = "task-meta";
+  if (opts.overdue) meta.append(Object.assign(document.createElement("span"), { textContent: human(t.date) }));
+  if (t.note) meta.append(Object.assign(document.createElement("span"), { className: "note", textContent: t.note }));
+  body.append(title);
+  if (meta.childElementCount) body.append(meta);
+  body.onclick = () => openSheet(t);
+
+  li.append(check);
+  if (t.time) li.append(Object.assign(document.createElement("span"), { className: "time" + (opts.late && !t.done ? " late" : ""), textContent: t.time }));
+  li.append(body);
+
+  if (opts.overdue) {
+    const move = document.createElement("button");
+    move.className = "move-btn";
+    move.textContent = "На сегодня";
+    move.onclick = (e) => { e.stopPropagation(); moveToToday(t); };
+    li.append(move);
+  }
+  return li;
+}
+
+/* ---------- действия ---------- */
+function selectDay(ds) {
+  state.selected = ds;
+  const d = toDate(ds);
+  if (d.getUTCMonth() !== state.view.m || d.getUTCFullYear() !== state.view.y) {
+    state.view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+    loadMonth().then(render).catch(showError);
+  } else {
+    render();
+  }
+  haptic("light");
+}
+
+function shiftMonth(n) {
+  const d = new Date(Date.UTC(state.view.y, state.view.m + n, 1));
+  state.view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+  loadMonth().then(renderCalendar).catch(showError);
+}
+
+async function toggleDone(t, li, check) {
+  const next = !t.done;
+  haptic(next ? "success" : "light");
+  if (next) { check.classList.add("on"); li.classList.add("leaving"); await new Promise((r) => setTimeout(r, 260)); }
+  try {
+    const updated = await api("PATCH", `/api/tasks/${t.id}`, { done: next });
+    await reload();
+    if (next) toast(`«${updated.title}» выполнено`, async () => {
+      await api("PATCH", `/api/tasks/${t.id}`, { done: false });
+      await reload();
+    });
+  } catch (e) { showError(e); render(); }
+}
+
+async function moveToToday(t) {
+  haptic("light");
+  try {
+    await api("PATCH", `/api/tasks/${t.id}`, { date: state.today });
+    await reload();
+  } catch (e) { showError(e); }
+}
+
+let toastTimer;
+function toast(text, undo) {
+  const el = $("toast");
+  $("toastText").textContent = text;
+  $("toastUndo").hidden = !undo;
+  $("toastUndo").onclick = async () => { el.hidden = true; try { await undo(); } catch (e) { showError(e); } };
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), 4000);
+}
+
+/* ---------- форма ---------- */
+const form = $("sheet");
+
+function openSheet(task) {
+  state.editing = task || null;
+  $("sheetTitle").textContent = task ? "Изменить задачу" : "Новая задача";
+  form.elements.title.value = task?.title || "";
+  form.elements.date.value = task?.date || state.selected;
+  form.elements.time.value = task?.time || "";
+  form.elements.note.value = task?.note || "";
+  $("deleteBtn").hidden = !task;
+  $("backdrop").hidden = false;
+  form.hidden = false;
+  tg?.BackButton?.show();
+  if (!task) setTimeout(() => form.elements.title.focus(), 50);
+}
+
+function closeSheet() {
+  form.hidden = true;
+  $("backdrop").hidden = true;
+  tg?.BackButton?.hide();
+  state.editing = null;
+}
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const data = {
+    title: form.elements.title.value.trim(),
+    date: form.elements.date.value,
+    time: form.elements.time.value || null,
+    note: form.elements.note.value.trim(),
+  };
+  if (!data.title || !data.date) return;
+  $("saveBtn").disabled = true;
+  try {
+    if (state.editing) await api("PATCH", `/api/tasks/${state.editing.id}`, data);
+    else await api("POST", "/api/tasks", data);
+    haptic("success");
+    closeSheet();
+    if (data.date !== state.selected) selectDay(data.date);
+    await reload();
+  } catch (err) { showError(err); }
+  finally { $("saveBtn").disabled = false; }
+};
+
+$("deleteBtn").onclick = () => {
+  const t = state.editing;
+  const doDelete = async (ok) => {
+    if (!ok) return;
+    try { await api("DELETE", `/api/tasks/${t.id}`); closeSheet(); await reload(); haptic("medium"); }
+    catch (e) { showError(e); }
+  };
+  if (tg?.showConfirm && tg.initData) tg.showConfirm(`Удалить «${t.title}»?`, doDelete);
+  else doDelete(confirm(`Удалить «${t.title}»?`));
+};
+
+$("cancelBtn").onclick = closeSheet;
+$("backdrop").onclick = closeSheet;
+tg?.BackButton?.onClick(closeSheet);
+$("addBtn").onclick = () => openSheet(null);
+$("prevMonth").onclick = () => shiftMonth(-1);
+$("nextMonth").onclick = () => shiftMonth(1);
+$("gotoToday").onclick = () => selectDay(state.today);
+
+/* ---------- старт ---------- */
+async function init() {
+  try {
+    const me = await api("GET", "/api/me");
+    const dayChanged = state.today && state.today !== me.today;
+    state.today = me.today;
+    if (!state.selected || dayChanged) {
+      state.selected = me.today;
+      const d = toDate(me.today);
+      state.view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
+    }
+    await reload();
+  } catch (e) { showError(e); }
+}
+
+// вернулись в приложение (например, на следующий день) — обновим данные
+document.addEventListener("visibilitychange", () => { if (!document.hidden) init(); });
+init();
