@@ -103,7 +103,27 @@ function plural(n, one, few, many) {
   return many;
 }
 
-/* Фрази привітання за часом доби. {name} — імʼя; без імені фраза скорочується. */
+/* Фрази привітання. {name} — імʼя; без імені фраза скорочується.
+   ANYTIME — дружні, підходять будь-коли; решта — під час доби. Обидва набори змішуються. */
+const ANYTIME = [
+  "Привіт, {name}",
+  "Привітик, {name}",
+  "Привіт-привіт, {name}",
+  "Вітаю, {name}",
+  "Вітаю вас, {name}",
+  "Мої вітання, {name}",
+  "Рада бачити, {name}",
+  "Рада тебе бачити, {name}",
+  "З поверненням, {name}",
+  "Салют, {name}",
+  "Хей, {name}",
+  "Здоровенькі були, {name}",
+  "Добридень, {name}",
+  "Як справи, {name}?",
+  "Як ся маєш, {name}?",
+  "Ну що, {name}, до справ?",
+];
+
 const GREETINGS = {
   morning: [ // 05:00–11:59
     "Доброго ранку, {name}",
@@ -113,6 +133,8 @@ const GREETINGS = {
     "Прокидаємось, {name}",
     "Кава й план — і вперед, {name}",
     "Новий день — нові можливості, {name}",
+    "Ранок, {name}! Прокидаємось?",
+    "Сонячного ранку, {name}",
   ],
   day: [ // 12:00–17:59
     "Добрий день, {name}",
@@ -130,6 +152,7 @@ const GREETINGS = {
     "Ще трохи — і відпочинок, {name}",
     "Затишного вечора, {name}",
     "Як пройшов день, {name}?",
+    "Вечірні вітання, {name}",
   ],
   night: [ // 23:00–04:59
     "Доброї ночі, {name}",
@@ -149,23 +172,27 @@ function dayPart(h = new Date().getHours()) {
 
 function fillName(phrase, name) {
   if (name) return phrase.replace("{name}", name);
-  return phrase.replace(/,?\s*\{name\}/, "").replace(/\s+([?!.])$/, "$1");
+  return phrase.replace(/,?\s*\{name\}/, "").replace(/\s+([?!.,])/, "$1");
 }
 
-// Фраза обирається випадково один раз на частину доби (щоб не мигтіла при кожному оновленні)
-// і не повторює попередню.
+// Фраза обирається випадково при кожному відкритті застосунку (і при зміні частини доби),
+// але не мигтить при оновленні списку. Останні кілька фраз не повторюються.
 const greetingCache = { part: null, phrase: null };
-function greeting() {
+function pickGreeting() {
   const part = dayPart();
-  if (greetingCache.part !== part) {
-    const pool = GREETINGS[part];
-    let last = null;
-    try { last = localStorage.getItem("greeting"); } catch (_) {}
-    const options = pool.length > 1 ? pool.filter((p) => p !== last) : pool;
-    greetingCache.part = part;
-    greetingCache.phrase = options[Math.floor(Math.random() * options.length)];
-    try { localStorage.setItem("greeting", greetingCache.phrase); } catch (_) {}
-  }
+  const pool = [...ANYTIME, ...GREETINGS[part]];
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem("greetings") || "[]"); } catch (_) {}
+  const fresh = pool.filter((p) => !recent.includes(p));
+  const options = fresh.length ? fresh : pool;
+  const phrase = options[Math.floor(Math.random() * options.length)];
+  try { localStorage.setItem("greetings", JSON.stringify([phrase, ...recent].slice(0, 6))); } catch (_) {}
+  greetingCache.part = part;
+  greetingCache.phrase = phrase;
+}
+
+function greeting() {
+  if (greetingCache.part !== dayPart()) pickGreeting();
   return fillName(greetingCache.phrase, state.name);
 }
 
@@ -433,6 +460,7 @@ showPage(savedPage === "calendar" ? "calendar" : "today");
 
 /* ---------- старт ---------- */
 async function init() {
+  pickGreeting();
   try {
     const me = await api("GET", "/api/me");
     const dayChanged = state.today && state.today !== me.today;
