@@ -37,9 +37,10 @@ async def cmd_start(message: Message, db: Database, cfg: Config) -> None:
     u = message.from_user
     await db.upsert_user(u.id, chat_id=message.chat.id, first_name=u.first_name)
     await message.answer(
-        f"Привіт, {u.first_name}!\n\n"
-        "Я — планер справ. Щодня показую план, а ввечері нагадаю про те, що ще не зроблено.\n\n"
-        "• <b>Відкрити планер</b> — календар, додавання і редагування завдань\n"
+        f"Привіт, {u.first_name}! Я — <b>Ritmoza</b>.\n"
+        "<i>Плануй · живи · розвивайся</i>\n\n"
+        "Щодня показую план, а ввечері нагадаю про те, що ще не зроблено.\n\n"
+        "• <b>Відкрити Ritmoza</b> — календар, справи і звички\n"
         "• /today — план на сьогодні\n"
         "• /add 18:30 Зателефонувати мамі — додати завдання на сьогодні\n"
         "• /tomorrow Купити хліб — додати на завтра"

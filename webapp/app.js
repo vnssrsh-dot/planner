@@ -4,7 +4,7 @@ const tg = window.Telegram?.WebApp;
 if (tg && tg.initData) {
   tg.ready();
   tg.expand();
-  try { tg.setHeaderColor("#F5F5F3"); tg.setBackgroundColor("#F5F5F3"); } catch (_) {}
+  try { tg.setHeaderColor("#F4F2EE"); tg.setBackgroundColor("#F4F2EE"); } catch (_) {}
 }
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -758,6 +758,13 @@ if (location.hash === "#habits") savedPage = "habits";
 showPage(PAGES.includes(savedPage) ? savedPage : "today");
 
 /* ---------- старт ---------- */
+const splashStart = Date.now();
+function hideSplash() {
+  const el = $("splash");
+  if (!el || el.classList.contains("gone")) return;
+  setTimeout(() => el.classList.add("gone"), Math.max(0, 700 - (Date.now() - splashStart)));
+}
+
 async function init() {
   pickGreeting();
   pickHeroIcon();
@@ -773,6 +780,7 @@ async function init() {
     }
     await reload();
   } catch (e) { showError(e); }
+  hideSplash();
 }
 
 // повернулися в застосунок (наприклад, наступного дня) — оновимо дані

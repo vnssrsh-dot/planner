@@ -2,9 +2,10 @@
 <html lang="uk">
 <head>
   <meta charset="utf-8">
-  <meta name="theme-color" content="#F5F5F3">
+  <meta name="theme-color" content="#F4F2EE">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Планер справ</title>
+  <title>Ritmoza</title>
+  <link rel="icon" href="/static/brand/mark.png">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,8 +13,19 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <div class="splash" id="splash" aria-hidden="true">
+    <img class="brand-mark" src="/static/brand/mark.png" alt="">
+    <span class="wordmark"></span>
+    <span class="tagline">Плануй · живи · розвивайся</span>
+  </div>
+
   <!-- Сторінка 1: нагадувалка на сьогодні -->
   <main class="app page" id="page-today">
+    <header class="brand">
+      <img class="brand-mark" src="/static/brand/mark.png" alt="">
+      <span class="wordmark" role="img" aria-label="Ritmoza"></span>
+      <span class="tagline">Плануй · живи · розвивайся</span>
+    </header>
     <header class="hero">
       <svg class="spark" id="heroIcon" viewBox="0 0 24 24" aria-hidden="true"></svg>
       <div class="hero-date" id="todayDate"></div>

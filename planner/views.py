@@ -42,7 +42,7 @@ def tasks_keyboard(
             row.append(InlineKeyboardButton(text="→ Завтра", callback_data=f"tmrw:{t['id']}"))
         rows.append(row)
     if webapp_url:
-        rows.append([InlineKeyboardButton(text="Відкрити планер", web_app=WebAppInfo(url=webapp_url))])
+        rows.append([InlineKeyboardButton(text="Відкрити Ritmoza", web_app=WebAppInfo(url=webapp_url))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

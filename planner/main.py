@@ -33,9 +33,20 @@ async def main() -> None:
         BotCommand(command="add", description="Додати завдання на сьогодні"),
         BotCommand(command="tomorrow", description="Додати завдання на завтра"),
     ])
+    try:
+        await bot.set_my_short_description("Ritmoza — плануй · живи · розвивайся. Справи, календар і звички в Telegram.")
+        await bot.set_my_description(
+            "Ritmoza — твій спокійний планер.\n\n"
+            "• план на сьогодні та календар\n"
+            "• звички й прогрес регулярності\n"
+            "• нагадування, коли день добігає кінця\n\n"
+            "Натисни «Почати», щоб розпочати."
+        )
+    except Exception:
+        log.warning("Не вдалося оновити опис бота")
     if cfg.webapp_url:
         await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(text="Планер", web_app=WebAppInfo(url=cfg.webapp_url))
+            menu_button=MenuButtonWebApp(text="Ritmoza", web_app=WebAppInfo(url=cfg.webapp_url))
         )
     else:
         log.warning("WEBAPP_URL не задан — Mini App будет недоступна из Telegram")

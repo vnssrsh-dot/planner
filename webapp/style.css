@@ -1,19 +1,20 @@
-/* Палітра Neutral Minimal */
+/* Палітра Ritmoza — тепла, за логотипом: шавлія, глибокий лісовий, теракота */
 :root {
-  --bg: #F5F5F3;        /* основний фон */
+  --bg: #F4F2EE;        /* основний фон — теплий молочний */
   --card: #FFFFFF;      /* картки і поверхні */
-  --line: #E5E7E5;      /* межі і розділювачі */
-  --text: #242824;      /* основний текст */
-  --muted: #777F79;     /* вторинний текст */
-  --accent: #607D70;    /* основний акцент */
-  --accent-soft: #E3EBE6;
-  --urgent: #C45D56;    /* термінові завдання */
-  --done: #607D70;      /* виконані завдання */
-  --inactive: #B8BDB9;  /* неактивні елементи */
-  --blue: #DCE7F5;      /* календар, плани, інформаційні картки */
-  --apricot: #F4E2C8;   /* важливе, нагадування, «далі» */
-  --lavender: #EBDDF3;  /* звички, особисті цілі */
-  --coral: #F2DAD7;     /* термінове, мʼякі попередження */
+  --line: #E7E3DC;      /* межі і розділювачі */
+  --text: #26302A;      /* основний текст — глибокий лісовий */
+  --muted: #78807A;     /* вторинний текст */
+  --accent: #607567;    /* шавлія: дії, вибрана дата */
+  --accent-soft: #E6EBE4;
+  --terracotta: #C8876D; /* акцент бренду: зірочка, лічильники */
+  --urgent: #B95C50;    /* термінові завдання */
+  --done: #607567;      /* виконані завдання */
+  --inactive: #BCBEB7;  /* неактивні елементи */
+  --blue: #E1E8EC;      /* календар, час справ */
+  --apricot: #F4E4D7;   /* найближча справа «Далі» */
+  --lavender: #ECE3EE;  /* звички */
+  --coral: #F3DCD6;     /* прострочене, мʼякі попередження */
   --radius: 12px;
   --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -32,6 +33,29 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .app { max-width: 560px; margin: 0 auto; padding: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
 
+/* ---------- бренд ---------- */
+.brand { display: flex; align-items: center; gap: 8px; padding: 2px 2px 10px; }
+.brand-mark { width: 30px; height: auto; display: block; }
+/* вордмарк — маска, щоб колір брався з палітри */
+.wordmark {
+  display: block; height: 19px; aspect-ratio: 603 / 124; background: var(--text);
+  -webkit-mask: url("/static/brand/wordmark.png") center / contain no-repeat;
+          mask: url("/static/brand/wordmark.png") center / contain no-repeat;
+}
+.tagline { font-size: 10px; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); }
+.brand .tagline { margin-left: auto; letter-spacing: .22em; font-size: 9px; }
+
+/* заставка під час завантаження */
+.splash {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; justify-items: center; gap: 14px;
+  background: var(--bg); transition: opacity .45s ease, visibility .45s;
+}
+.splash.gone { opacity: 0; visibility: hidden; }
+.splash .brand-mark { width: 96px; animation: rise .7s ease-out both; }
+.splash .wordmark { height: 34px; animation: rise .7s .1s ease-out both; }
+.splash .tagline { animation: rise .7s .2s ease-out both; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
 /* ---------- сторінка «Сьогодні» ---------- */
 .hero {
   position: relative; margin: 8px 0 28px; padding: 22px 20px 20px;
@@ -39,7 +63,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .spark {
   position: absolute; top: 18px; right: 18px; width: 22px; height: 22px;
-  fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round;
+  fill: none; stroke: var(--terracotta); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round;
   animation: spark-in .9s ease-out both;
 }
 @keyframes spark-in { from { opacity: 0; transform: rotate(-45deg) scale(.6); } }
@@ -134,7 +158,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .task.done .time { background: var(--bg); }
 .task.next { background: color-mix(in srgb, var(--apricot) 55%, var(--card)); }
 .task.next .time { background: var(--apricot); }
-.next-label { flex: none; font-size: 11px; color: #8A6A3E; background: var(--apricot); padding: 2px 8px; border-radius: 10px; }
+.next-label { flex: none; font-size: 11px; color: #9A5F47; background: var(--apricot); padding: 2px 8px; border-radius: 10px; }
 .task.done .time { color: var(--inactive); }
 
 .overdue { margin-bottom: 24px; }
@@ -230,7 +254,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .tab.active { color: var(--accent); }
 .badge {
   position: absolute; top: 7px; left: calc(50% + 8px); min-width: 16px; height: 16px; padding: 0 4px;
-  border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; line-height: 16px;
+  border-radius: 8px; background: var(--terracotta); color: #fff; font-size: 10px; font-weight: 600; line-height: 16px;
 }
 
 /* ---------- сторінка «Звички» ---------- */
@@ -248,14 +272,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .2s, border-color .2s;
 }
 .chip.marked::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
-.chip.active { background: var(--lavender); border-color: color-mix(in srgb, #8E6FA8 35%, transparent); font-weight: 500; }
+.chip.active { background: var(--lavender); border-color: color-mix(in srgb, #9A7FA0 35%, transparent); font-weight: 500; }
 
 .habit-card { background: var(--lavender); border-radius: 18px; padding: 18px 18px 16px; }
 .habit-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .habit-top > div { min-width: 0; }
-.habit-kind { font-size: 12px; color: #6E5A80; letter-spacing: .02em; }
+.habit-kind { font-size: 12px; color: #7A6680; letter-spacing: .02em; }
 .habit-card h3 { margin: 4px 0 0; font: 600 21px/1.25 var(--font-display); overflow-wrap: anywhere; }
-.edit-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; color: #6E5A80; background: color-mix(in srgb, var(--card) 55%, transparent); }
+.edit-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; color: #7A6680; background: color-mix(in srgb, var(--card) 55%, transparent); }
 .edit-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0 16px; }
