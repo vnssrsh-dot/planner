@@ -46,8 +46,16 @@ ${ok ? "<p>Надішліть боту /start, щоб перевірити.</p>"
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
+    // Mini App посилається на /static/... — віддаємо файли з ../webapp (працює й без токена)
+    if (url.pathname.startsWith("/static/")) {
+      return env.ASSETS.fetch(new Request(new URL(url.pathname.slice(7), url.origin), req));
+    }
     try {
-      if (!env.BOT_TOKEN) return new Response("BOT_TOKEN is not set", { status: 500 });
+      if (!env.BOT_TOKEN) {
+        return new Response("Ritmoza: додайте секрет BOT_TOKEN у Settings → Variables and Secrets.", {
+          status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
       await ensureSchema(env.DB);
       const store = new Store(env.DB);
 
@@ -63,10 +71,6 @@ export default {
       if (url.pathname === "/setup") return setup(env, store, url.origin);
       if (url.pathname.startsWith("/api/")) return await handleApi(req, env, store);
 
-      // Mini App посилається на /static/... — віддаємо файли з ../webapp
-      if (url.pathname.startsWith("/static/")) {
-        return env.ASSETS.fetch(new Request(new URL(url.pathname.slice(7), url.origin), req));
-      }
       return env.ASSETS.fetch(req);
     } catch (e) {
       if (e instanceof HttpError) return new Response(e.message, { status: e.status });
