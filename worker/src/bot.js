@@ -82,7 +82,18 @@ async function refreshDay(env, store, cb, webappUrl) {
 async function onCallback(env, store, cb, webappUrl) {
   const uid = cb.from.id;
   const [kind, a, b] = (cb.data || "").split(":");
-  if (kind === "done") {
+  if (kind === "rdone") {
+    // «✓ Виконано» під нагадуванням: відмічаємо і лишаємо в повідомленні тільки кнопку застосунку
+    const task = await store.updateTask(uid, +a, { done: true });
+    await tg(env, "answerCallbackQuery", { callback_query_id: cb.id, text: task ? `Виконано: ${task.title}` : "Завдання не знайдено" });
+    if (task && cb.message) {
+      await tg(env, "editMessageText", {
+        chat_id: cb.message.chat.id, message_id: cb.message.message_id, parse_mode: "HTML",
+        text: `✓ Виконано: <b>${esc(task.title)}</b>${task.time ? ` о ${task.time}` : ""}`,
+        reply_markup: openKeyboard(webappUrl),
+      });
+    }
+  } else if (kind === "done") {
     const task = await store.updateTask(uid, +a, { done: true });
     await tg(env, "answerCallbackQuery", { callback_query_id: cb.id, text: task ? `Виконано: ${task.title}` : "Завдання не знайдено" });
     if (cb.message) await refreshDay(env, store, cb, webappUrl);

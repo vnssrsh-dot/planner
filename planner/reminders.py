@@ -15,7 +15,7 @@ from aiogram import Bot
 from .config import Config
 from .db import Database
 from .timeutil import local_now, tomorrow_of
-from .views import evening_text, invite_text, morning_text, open_keyboard
+from .views import evening_text, invite_text, morning_text, open_keyboard, reminder_keyboard
 
 log = logging.getLogger(__name__)
 INVITE_DELAY = timedelta(minutes=30)
@@ -47,7 +47,7 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
                 f"{'Час минув' if now > due else 'Незабаром'}: <b>{escape(t['title'])}</b> о {t['time']}"
                 + (f"\n<i>{escape(t['note'])}</i>" if t["note"] else "")
             )
-            await bot.send_message(user["chat_id"], text, reply_markup=kb)
+            await bot.send_message(user["chat_id"], text, reply_markup=reminder_keyboard(t, cfg.webapp_url or None))
             await db.mark_reminded(t["id"])
 
     # 3) Утром — план дня, хвосты и серии привычек (в пределах 3 часов от MORNING_HOUR, раз в день)

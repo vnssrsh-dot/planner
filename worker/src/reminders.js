@@ -6,7 +6,7 @@
 // Під кожним повідомленням лише кнопка «Відкрити Ritmoza» — справи змінюють у застосунку.
 import { localNow, addDays } from "./time.js";
 import { tg } from "./telegram.js";
-import { morningText, inviteText, eveningText, openKeyboard, esc } from "./views.js";
+import { morningText, inviteText, eveningText, openKeyboard, reminderKeyboard, esc } from "./views.js";
 
 const INVITE_DELAY_MS = 30 * 60 * 1000;
 
@@ -34,9 +34,11 @@ async function checkUser(env, store, user, webappUrl) {
       await store.markReminded(t.id); // давно минуло — не спамимо, скажемо ввечері
     } else if (now.minutes >= due - before) {
       const late = now.minutes > due;
-      await send(env, user.chat_id,
-        `${late ? "Час минув" : "Незабаром"}: <b>${esc(t.title)}</b> о ${t.time}` + (t.note ? `\n<i>${esc(t.note)}</i>` : ""),
-        webappUrl);
+      await tg(env, "sendMessage", {
+        chat_id: user.chat_id, parse_mode: "HTML",
+        text: `${late ? "Час минув" : "Незабаром"}: <b>${esc(t.title)}</b> о ${t.time}` + (t.note ? `\n<i>${esc(t.note)}</i>` : ""),
+        reply_markup: reminderKeyboard(t, webappUrl),
+      });
       await store.markReminded(t.id);
     }
   }

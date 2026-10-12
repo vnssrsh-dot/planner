@@ -137,6 +137,14 @@ def open_keyboard(webapp_url: str | None, hash_: str = "") -> InlineKeyboardMark
     ]])
 
 
+def reminder_keyboard(task: dict, webapp_url: str | None) -> InlineKeyboardMarkup:
+    """«Незабаром»: отметить сразу из чата или открыть приложение."""
+    row = [InlineKeyboardButton(text="✓ Виконано", callback_data=f"rdone:{task['id']}")]
+    if webapp_url:
+        row.append(InlineKeyboardButton(text="Відкрити Ritmoza", web_app=WebAppInfo(url=webapp_url)))
+    return InlineKeyboardMarkup(inline_keyboard=[row])
+
+
 def invite_text(hour: int, first_name: str | None) -> str:
     """Приглашение через 30 минут после знакомства, если человек ничего не добавил."""
     if 4 <= hour < 12:

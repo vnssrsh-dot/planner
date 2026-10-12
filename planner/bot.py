@@ -110,6 +110,21 @@ async def _refresh(cb: CallbackQuery, db: Database, cfg: Config) -> None:
         pass
 
 
+@router.callback_query(F.data.startswith("rdone:"))
+async def cb_reminder_done(cb: CallbackQuery, db: Database, cfg: Config) -> None:
+    """«✓ Виконано» под напоминанием: отмечаем и оставляем только кнопку приложения."""
+    task = await db.update_task(cb.from_user.id, int(cb.data.split(":")[1]), done=True)
+    await cb.answer(f"Виконано: {task['title']}" if task else "Завдання не знайдено")
+    if task:
+        when = f" о {task['time']}" if task["time"] else ""
+        try:
+            await cb.message.edit_text(
+                f"✓ Виконано: <b>{escape(task['title'])}</b>{when}", reply_markup=open_keyboard(cfg.webapp_url or None)
+            )
+        except Exception:
+            pass
+
+
 @router.callback_query(F.data.startswith("done:"))
 async def cb_done(cb: CallbackQuery, db: Database, cfg: Config) -> None:
     task = await db.update_task(cb.from_user.id, int(cb.data.split(":")[1]), done=True)

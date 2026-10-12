@@ -105,6 +105,13 @@ export function openKeyboard(webappUrl, hash = "") {
   return webappUrl ? { inline_keyboard: [[{ text: "Відкрити Ritmoza", web_app: { url: webappUrl + hash } }]] } : undefined;
 }
 
+// Нагадування «Незабаром»: відмітити одразу з чату або відкрити застосунок
+export function reminderKeyboard(task, webappUrl) {
+  const row = [{ text: "✓ Виконано", callback_data: `rdone:${task.id}` }];
+  if (webappUrl) row.push({ text: "Відкрити Ritmoza", web_app: { url: webappUrl } });
+  return { inline_keyboard: [row] };
+}
+
 // Запрошення через 30 хвилин після знайомства, якщо людина ще нічого не додала
 export function inviteText(hour, firstName) {
   if (hour >= 4 && hour < 12) {
