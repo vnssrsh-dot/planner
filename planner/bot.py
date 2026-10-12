@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from .config import Config
 from .db import Database
 from .timeutil import human_day, local_now, tomorrow_of
-from .views import day_text, habits_keyboard, habits_text, tasks_keyboard
+from .views import day_text, habits_keyboard, habits_text, open_keyboard, tasks_keyboard
 
 router = Router()
 
@@ -28,7 +28,7 @@ async def send_day(message: Message, db: Database, cfg: Config, user_id: int) ->
     overdue = await db.overdue(user_id, today)
     await message.answer(
         day_text(today, tasks, overdue),
-        reply_markup=tasks_keyboard(tasks, cfg.webapp_url or None),
+        reply_markup=open_keyboard(cfg.webapp_url or None),
     )
 
 
@@ -43,9 +43,10 @@ async def cmd_start(message: Message, db: Database, cfg: Config) -> None:
         "• <b>Відкрити Ritmoza</b> — календар, справи і звички\n"
         "• /today — план на сьогодні\n"
         "• /add 18:30 Зателефонувати мамі — додати завдання на сьогодні\n"
-        "• /tomorrow Купити хліб — додати на завтра"
+        "• /tomorrow Купити хліб — додати на завтра",
+        reply_markup=open_keyboard(cfg.webapp_url or None),
     )
-    await send_day(message, db, cfg, u.id)
+    await db.mark_started(u.id)  # через 30 мин — приглашение, если ничего не добавлено
 
 
 @router.message(Command("today"))

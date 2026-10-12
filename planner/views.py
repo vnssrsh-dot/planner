@@ -128,21 +128,59 @@ def morning_text(day: str, tasks: list[dict], overdue: list[dict], habits: list[
     return "\n".join(lines)
 
 
-def welcome_morning_text(first_name: str | None) -> str:
-    name = f", {escape(first_name)}" if first_name else ""
+def open_keyboard(webapp_url: str | None, hash_: str = "") -> InlineKeyboardMarkup | None:
+    """Под всеми сообщениями — только «Відкрити Ritmoza»: дела меняют в приложении."""
+    if not webapp_url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Відкрити Ritmoza", web_app=WebAppInfo(url=webapp_url + hash_))
+    ]])
+
+
+def invite_text(hour: int, first_name: str | None) -> str:
+    """Приглашение через 30 минут после знакомства, если человек ничего не добавил."""
+    if 4 <= hour < 12:
+        name = f", {escape(first_name)}" if first_name else ""
+        return "\n".join([
+            f"<b>Доброго ранку{name}!</b> ☀️",
+            "",
+            "Ritmoza готова допомогти спланувати день.",
+            "Почни з малого: додай 2–3 справи на сьогодні — я нагадаю про них вчасно, а ввечері підкажу, що ще лишилось.",
+            "",
+            "Можна завести й звичку — наприклад, «пити воду» чи «зарядка», — і я рахуватиму твої серії.",
+            "",
+            "<i>Швидко з чату: /add 18:30 Зателефонувати мамі</i>",
+        ])
+    if 12 <= hour < 19:
+        return "\n".join([
+            "<b>Ще пів дня попереду</b> ☀️",
+            "",
+            "Запиши, що хочеш встигнути сьогодні — я нагадаю за 15 хвилин до кожної справи, а о 21:00 підкажу, що лишилось.",
+            "",
+            "<i>Або з чату: /add 18:30 Зателефонувати мамі</i>",
+        ])
     return "\n".join([
-        f"<b>Доброго ранку{name}!</b> ☀️",
+        "<b>Вечір — гарний час, щоб спланувати завтра</b> 🌙",
         "",
-        "Ritmoza готова допомогти спланувати день.",
-        "Почни з малого: додай 2–3 справи на сьогодні — я нагадаю про них вчасно, а ввечері підкажу, що ще лишилось.",
+        "Додай 2–3 справи на завтра — зранку я пришлю план, а за 15 хвилин до кожної справи нагадаю.",
         "",
-        "Можна завести й звичку — наприклад, «пити воду» чи «зарядка», — і я рахуватиму твої серії.",
-        "",
-        "<i>Швидко з чату: /add 18:30 Зателефонувати мамі</i>",
+        "<i>Або з чату: /tomorrow Купити хліб</i>",
     ])
 
 
-def fill_keyboard(webapp_url: str | None) -> InlineKeyboardMarkup | None:
-    if not webapp_url:
+def evening_text(tasks: list[dict], habits: list[dict], tomorrow_empty: bool) -> str | None:
+    """21:00 — одно сообщение «Підсумки дня»; None, если сказать нечего."""
+    open_tasks = [t for t in tasks if not t["done"]]
+    blocks = []
+    if open_tasks:
+        blocks.append("\n".join([f"<b>Не виконано: {len(open_tasks)}</b>", *map(task_line, open_tasks)]))
+    if habits:
+        blocks.append("\n".join(["<b>Звички ще не відмічені</b>", *(
+            f"• {'без зриву: ' if h['kind'] == 'quit' else ''}{escape(h['title'])}" for h in habits)]))
+    if tomorrow_empty:
+        blocks.append("<b>Завтра поки нічого не заплановано</b> — додай справи, і зранку я пришлю план.")
+    if not blocks:
         return None
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Заповнити планер", web_app=WebAppInfo(url=webapp_url))]])
+    if not open_tasks and tasks:
+        blocks.insert(0, "Усе заплановане на сьогодні виконано 🎉")
+    return "\n\n".join(["<b>Підсумки дня</b> 🌙", *blocks])

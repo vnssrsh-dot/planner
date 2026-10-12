@@ -100,20 +100,58 @@ export function morningText(day, tasks, overdue, habits) {
   return lines.join("\n");
 }
 
-// Перший ранок після знайомства, якщо планер ще порожній
-export function welcomeMorningText(firstName) {
+// Кнопка під усіма повідомленнями: уся робота зі справами — у застосунку
+export function openKeyboard(webappUrl, hash = "") {
+  return webappUrl ? { inline_keyboard: [[{ text: "Відкрити Ritmoza", web_app: { url: webappUrl + hash } }]] } : undefined;
+}
+
+// Запрошення через 30 хвилин після знайомства, якщо людина ще нічого не додала
+export function inviteText(hour, firstName) {
+  if (hour >= 4 && hour < 12) {
+    return [
+      `<b>Доброго ранку${firstName ? `, ${esc(firstName)}` : ""}!</b> ☀️`,
+      "",
+      "Ritmoza готова допомогти спланувати день.",
+      "Почни з малого: додай 2–3 справи на сьогодні — я нагадаю про них вчасно, а ввечері підкажу, що ще лишилось.",
+      "",
+      "Можна завести й звичку — наприклад, «пити воду» чи «зарядка», — і я рахуватиму твої серії.",
+      "",
+      "<i>Швидко з чату: /add 18:30 Зателефонувати мамі</i>",
+    ].join("\n");
+  }
+  if (hour >= 12 && hour < 19) {
+    return [
+      "<b>Ще пів дня попереду</b> ☀️",
+      "",
+      "Запиши, що хочеш встигнути сьогодні — я нагадаю за 15 хвилин до кожної справи, а о 21:00 підкажу, що лишилось.",
+      "",
+      "<i>Або з чату: /add 18:30 Зателефонувати мамі</i>",
+    ].join("\n");
+  }
   return [
-    `<b>Доброго ранку${firstName ? `, ${esc(firstName)}` : ""}!</b> ☀️`,
+    "<b>Вечір — гарний час, щоб спланувати завтра</b> 🌙",
     "",
-    "Ritmoza готова допомогти спланувати день.",
-    "Почни з малого: додай 2–3 справи на сьогодні — я нагадаю про них вчасно, а ввечері підкажу, що ще лишилось.",
+    "Додай 2–3 справи на завтра — зранку я пришлю план, а за 15 хвилин до кожної справи нагадаю.",
     "",
-    "Можна завести й звичку — наприклад, «пити воду» чи «зарядка», — і я рахуватиму твої серії.",
-    "",
-    "<i>Швидко з чату: /add 18:30 Зателефонувати мамі</i>",
+    "<i>Або з чату: /tomorrow Купити хліб</i>",
   ].join("\n");
 }
 
-export function fillKeyboard(webappUrl) {
-  return webappUrl ? { inline_keyboard: [[{ text: "Заповнити планер", web_app: { url: webappUrl } }]] } : undefined;
+// 21:00 — одне повідомлення «Підсумки дня»; null, якщо сказати нічого
+export function eveningText(tasks, habits, tomorrowEmpty) {
+  const open = tasks.filter((t) => !t.done);
+  const blocks = [];
+  if (open.length) {
+    blocks.push([`<b>Не виконано: ${open.length}</b>`, ...open.map(taskLine)].join("\n"));
+  }
+  if (habits.length) {
+    blocks.push(["<b>Звички ще не відмічені</b>",
+      ...habits.map((h) => `• ${h.kind === "quit" ? "без зриву: " : ""}${esc(h.title)}`)].join("\n"));
+  }
+  if (tomorrowEmpty) {
+    blocks.push("<b>Завтра поки нічого не заплановано</b> — додай справи, і зранку я пришлю план.");
+  }
+  if (!blocks.length) return null;
+  if (!open.length && tasks.length) blocks.unshift("Усе заплановане на сьогодні виконано 🎉");
+  return ["<b>Підсумки дня</b> 🌙", ...blocks].join("\n\n");
 }

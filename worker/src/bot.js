@@ -1,7 +1,7 @@
 // Обробка оновлень від Telegram (вебхук): команди та кнопки.
 import { localNow, addDays, humanDay } from "./time.js";
 import { tg } from "./telegram.js";
-import { dayText, tasksKeyboard, habitsText, habitsKeyboard, esc } from "./views.js";
+import { dayText, tasksKeyboard, habitsText, habitsKeyboard, openKeyboard, esc } from "./views.js";
 
 async function today(store, env, uid) {
   const user = await store.getUser(uid);
@@ -13,7 +13,7 @@ async function sendDay(env, store, chatId, uid, webappUrl) {
   const [tasks, overdue] = await Promise.all([store.tasksBetween(uid, day, day), store.overdue(uid, day)]);
   await tg(env, "sendMessage", {
     chat_id: chatId, parse_mode: "HTML", text: dayText(day, tasks, overdue),
-    reply_markup: tasksKeyboard(tasks, webappUrl),
+    reply_markup: openKeyboard(webappUrl),
   });
 }
 
@@ -43,8 +43,9 @@ async function onMessage(env, store, msg, webappUrl) {
         "• /today — план на сьогодні\n" +
         "• /add 18:30 Зателефонувати мамі — додати завдання на сьогодні\n" +
         "• /tomorrow Купити хліб — додати на завтра",
+      reply_markup: openKeyboard(webappUrl),
     });
-    await sendDay(env, store, msg.chat.id, u.id, webappUrl);
+    await store.markStarted(u.id); // через 30 хв — запрошення, якщо нічого не додано
   } else if (cmd === "today") {
     await sendDay(env, store, msg.chat.id, u.id, webappUrl);
   } else if (cmd === "add" || cmd === "tomorrow") {

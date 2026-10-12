@@ -3,7 +3,7 @@
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
      id INTEGER PRIMARY KEY, chat_id INTEGER, first_name TEXT, tz TEXT, last_evening_date TEXT,
-     last_morning_date TEXT, created_date TEXT, welcome_sent INTEGER NOT NULL DEFAULT 0)`,
+     last_morning_date TEXT, created_date TEXT, welcome_sent INTEGER NOT NULL DEFAULT 0, started_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS tasks (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, time TEXT,
      title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, done_at TEXT,
@@ -23,7 +23,7 @@ export async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
   // база, створена до появи ранкової зведення, — додаємо колонку (якщо вже є, SQLite поверне помилку)
-  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0"]) {
+  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT"]) {
     try { await db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run(); } catch {}
   }
   schemaReady = true;
@@ -60,6 +60,10 @@ export class Store {
   }
   getUser(id) { return this.q("SELECT * FROM users WHERE id = ?", id).first(); }
   usersWithChat() { return this.all("SELECT * FROM users WHERE chat_id IS NOT NULL"); }
+  // момент першого /start — від нього рахуємо 30 хвилин до запрошення
+  markStarted(id) {
+    return this.q("UPDATE users SET started_at = ? WHERE id = ? AND started_at IS NULL", new Date().toISOString(), id).run();
+  }
   markWelcomeSent(id) { return this.q("UPDATE users SET welcome_sent = 1 WHERE id = ?", id).run(); }
   // чи користувалась людина планером: є хоч одна справа або звичка
   async hasActivity(uid) {

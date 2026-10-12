@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_evening_date TEXT,                  -- дата последнего вечернего напоминания
     last_morning_date TEXT,                  -- дата последней утренней сводки
     created_date      TEXT,                  -- день знакомства с ботом
-    welcome_sent      INTEGER NOT NULL DEFAULT 0  -- приглашение заполнить планер уже отправлено
+    welcome_sent      INTEGER NOT NULL DEFAULT 0, -- приглашение заполнить планер уже отправлено
+    started_at        TEXT                   -- момент первого /start (UTC ISO)
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -74,7 +75,7 @@ class Database:
         self.conn.row_factory = aiosqlite.Row
         await self.conn.executescript(SCHEMA)
         # база, созданная раньше — добавляем новые колонки
-        for col in ("last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0"):
+        for col in ("last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT"):
             try:
                 await self.conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
             except aiosqlite.OperationalError:
@@ -110,6 +111,12 @@ class Database:
     async def all_users(self) -> list[aiosqlite.Row]:
         cur = await self.conn.execute("SELECT * FROM users WHERE chat_id IS NOT NULL")
         return list(await cur.fetchall())
+
+    async def mark_started(self, user_id: int) -> None:
+        await self.conn.execute(
+            "UPDATE users SET started_at = ? WHERE id = ? AND started_at IS NULL", (_now(), user_id)
+        )
+        await self.conn.commit()
 
     async def mark_welcome_sent(self, user_id: int) -> None:
         await self.conn.execute("UPDATE users SET welcome_sent = 1 WHERE id = ?", (user_id,))
