@@ -20,30 +20,18 @@
   - увечері (за замовчуванням о 21:00 за місцевим часом), якщо на сьогодні лишилися невиконані завдання, — з кнопками «✓» і «→ Завтра» прямо в чаті.
 - Команди бота: `/today` — план на сьогодні, `/add 18:30 Зателефонувати мамі`, `/tomorrow Купити хліб`.
 
-## Запуск для користувачів — безкоштовно (Cloudflare Workers)
+## Запуск для користувачів (Railway)
 
-Папка `worker/` — серверна частина для Cloudflare Workers (безкоштовний план): бот працює через вебхук,
-не «засинає», дані зберігаються в базі D1, нагадування запускаються розкладом щохвилини.
-Інтерфейс Mini App той самий (`webapp/`).
-
-1. **Створіть бота:** @BotFather → `/newbot` → назва `Ritmoza` → імʼя, напр. `ritmoza_bot`. Збережіть **токен**
-   (нікому його не надсилайте). Аватарка: `/setuserpic` → `webapp/brand/bot-avatar.png`.
-2. **Cloudflare:** зареєструйтесь на https://dash.cloudflare.com (безкоштовно).
-3. **Workers & Pages → Create → Import a repository →** GitHub → `vnssrsh-dot/planner`.
-   - гілка: `claude/telegram-task-planner-proto-3mflfv`
-   - **Root directory / Path:** `worker`
-   - Deploy command: `npx wrangler deploy` (за замовчуванням). База D1 створиться сама.
-4. Після першого розгортання: **Settings → Variables and Secrets → Add →** тип **Secret**, імʼя `BOT_TOKEN`,
-   значення — токен від BotFather → Deploy.
-5. Відкрийте у браузері `https://ritmoza.<ваш-піддомен>.workers.dev/setup` — сторінка підключить бота
-   і покаже **посилання для користувачів** `https://t.me/...`.
-6. Напишіть боту `/start`.
-
-<details><summary>Альтернатива: платний хостинг з Python-версією (Railway)</summary>
-
-Python-версія (`planner/`) запускається з `Dockerfile`: Railway → Deploy from GitHub repo, змінна `BOT_TOKEN`,
-Volume `/data`, Generate Domain.
-</details>
+1. **Створіть бота:** у Telegram відкрийте @BotFather → `/newbot` → назва `Ritmoza` → імʼя користувача, напр. `ritmoza_bot`.
+   BotFather дасть **токен** і **посилання** `t.me/ritmoza_bot` — саме його надсилайте новим користувачам.
+   Токен нікому не показуйте і не пишіть у чати.
+2. **Аватарка:** у @BotFather `/setuserpic` → оберіть бота → надішліть `webapp/brand/bot-avatar.png`.
+3. **Хостинг:** на https://railway.com → New Project → Deploy from GitHub repo → `vnssrsh-dot/planner`,
+   гілка `claude/telegram-task-planner-proto-3mflfv` (збирається з `Dockerfile`).
+4. **Змінні** (Variables): `BOT_TOKEN` = токен від BotFather.
+5. **Диск для бази:** Add Volume → шлях `/data` (там зберігається `planner.db`, щоб справи не зникали після перезапуску).
+6. **Публічна адреса:** Settings → Networking → Generate Domain. `WEBAPP_URL` підставиться сам.
+7. Напишіть боту `/start` — зʼявиться план і кнопка «Відкрити Ritmoza».
 
 ## Демо в браузері (GitHub Pages)
 
