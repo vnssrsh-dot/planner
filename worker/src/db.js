@@ -3,7 +3,7 @@
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
      id INTEGER PRIMARY KEY, chat_id INTEGER, first_name TEXT, tz TEXT, last_evening_date TEXT,
-     last_morning_date TEXT)`,
+     last_morning_date TEXT, created_date TEXT, welcome_sent INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS tasks (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, time TEXT,
      title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, done_at TEXT,
@@ -23,7 +23,9 @@ export async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
   // база, створена до появи ранкової зведення, — додаємо колонку (якщо вже є, SQLite поверне помилку)
-  try { await db.prepare("ALTER TABLE users ADD COLUMN last_morning_date TEXT").run(); } catch {}
+  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0"]) {
+    try { await db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run(); } catch {}
+  }
   schemaReady = true;
 }
 
@@ -48,16 +50,24 @@ export class Store {
   // ---------- users ----------
   async upsertUser(id, { chatId = null, firstName = null, tz = null } = {}) {
     await this.q(
-      `INSERT INTO users (id, chat_id, first_name, tz) VALUES (?, ?, ?, ?)
+      `INSERT INTO users (id, chat_id, first_name, tz, created_date) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          chat_id = COALESCE(excluded.chat_id, users.chat_id),
          first_name = COALESCE(excluded.first_name, users.first_name),
          tz = COALESCE(excluded.tz, users.tz)`,
-      id, chatId, firstName, tz,
+      id, chatId, firstName, tz, new Date().toISOString().slice(0, 10),
     ).run();
   }
   getUser(id) { return this.q("SELECT * FROM users WHERE id = ?", id).first(); }
   usersWithChat() { return this.all("SELECT * FROM users WHERE chat_id IS NOT NULL"); }
+  markWelcomeSent(id) { return this.q("UPDATE users SET welcome_sent = 1 WHERE id = ?", id).run(); }
+  // чи користувалась людина планером: є хоч одна справа або звичка
+  async hasActivity(uid) {
+    const r = await this.q(
+      "SELECT EXISTS(SELECT 1 FROM tasks WHERE user_id = ?) OR EXISTS(SELECT 1 FROM habits WHERE user_id = ?) AS used", uid, uid,
+    ).first();
+    return !!r?.used;
+  }
   setLastMorning(id, day) { return this.q("UPDATE users SET last_morning_date = ? WHERE id = ?", day, id).run(); }
   setLastEvening(id, day) { return this.q("UPDATE users SET last_evening_date = ? WHERE id = ?", day, id).run(); }
 

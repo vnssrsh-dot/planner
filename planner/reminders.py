@@ -9,7 +9,7 @@ from aiogram import Bot
 from .config import Config
 from .db import Database
 from .timeutil import local_now
-from .views import day_text, habits_keyboard, habits_text, morning_text, tasks_keyboard
+from .views import day_text, fill_keyboard, habits_keyboard, habits_text, morning_text, tasks_keyboard, welcome_morning_text
 
 log = logging.getLogger(__name__)
 
@@ -33,16 +33,26 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
             await bot.send_message(user["chat_id"], text, reply_markup=tasks_keyboard([t], None, with_tomorrow=True))
             await db.mark_reminded(t["id"])
 
-    # 2) Утром: план на день и сводка привычек (в пределах 3 часов от MORNING_HOUR)
+    # 2) Утром (в пределах 3 часов от MORNING_HOUR), раз в день:
+    #    - человек ещё ничего не добавил → разовое приглашение заполнить планер (не в день знакомства);
+    #    - уже пользуется → план дня, хвосты и серии привычек.
     if cfg.morning_hour <= now.hour < cfg.morning_hour + 3 and user["last_morning_date"] != today:
         await db.set_last_morning(user["id"], today)
-        tasks = await db.tasks_for_day(user["id"], today)
-        overdue = await db.overdue(user["id"], today)
-        habits = [h for h in await db.habits(user["id"]) if h["start_date"] <= today]
-        if any(not t["done"] for t in tasks) or overdue or habits:
+        if not await db.has_activity(user["id"]):
+            if not user["welcome_sent"] and user["created_date"] != today:
+                await bot.send_message(
+                    user["chat_id"], welcome_morning_text(user["first_name"]),
+                    reply_markup=fill_keyboard(cfg.webapp_url or None),
+                )
+                await db.mark_welcome_sent(user["id"])
+        else:
+            tasks = await db.tasks_for_day(user["id"], today)
+            overdue = await db.overdue(user["id"], today)
+            habits = [h for h in await db.habits(user["id"]) if h["start_date"] <= today]
+            has_open = any(not t["done"] for t in tasks)
             await bot.send_message(
                 user["chat_id"], morning_text(today, tasks, overdue, habits),
-                reply_markup=tasks_keyboard(tasks, cfg.webapp_url or None),
+                reply_markup=tasks_keyboard(tasks, cfg.webapp_url or None) if has_open else fill_keyboard(cfg.webapp_url or None),
             )
 
     # 3) Вечернее напоминание: день заканчивается, а задачи «горят»

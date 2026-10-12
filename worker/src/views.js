@@ -85,7 +85,7 @@ export function morningText(day, tasks, overdue, habits) {
   const open = tasks.filter((t) => !t.done);
   const lines = [`<b>Доброго ранку! План на ${humanDay(day)}</b>`, ""];
   if (open.length) lines.push(...open.map(taskLine));
-  else lines.push("На сьогодні справ немає — можна спокійно зайнятися собою.");
+  else lines.push("На сьогодні план ще порожній. Додай 1–3 головні справи — і день складеться легше.");
   if (overdue.length) {
     lines.push("", `<b>Не виконано раніше: ${overdue.length}</b>`);
     lines.push(...overdue.slice(0, 5).map((t) => `${taskLine(t)} <i>(${t.date.slice(8)}.${t.date.slice(5, 7)})</i>`));
@@ -98,4 +98,22 @@ export function morningText(day, tasks, overdue, habits) {
     lines.push("", "Гарного дня!");
   }
   return lines.join("\n");
+}
+
+// Перший ранок після знайомства, якщо планер ще порожній
+export function welcomeMorningText(firstName) {
+  return [
+    `<b>Доброго ранку${firstName ? `, ${esc(firstName)}` : ""}!</b> ☀️`,
+    "",
+    "Ritmoza готова допомогти спланувати день.",
+    "Почни з малого: додай 2–3 справи на сьогодні — я нагадаю про них вчасно, а ввечері підкажу, що ще лишилось.",
+    "",
+    "Можна завести й звичку — наприклад, «пити воду» чи «зарядка», — і я рахуватиму твої серії.",
+    "",
+    "<i>Швидко з чату: /add 18:30 Зателефонувати мамі</i>",
+  ].join("\n");
+}
+
+export function fillKeyboard(webappUrl) {
+  return webappUrl ? { inline_keyboard: [[{ text: "Заповнити планер", web_app: { url: webappUrl } }]] } : undefined;
 }

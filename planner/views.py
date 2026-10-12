@@ -115,7 +115,7 @@ def _habit_line(h: dict, day: str) -> str:
 def morning_text(day: str, tasks: list[dict], overdue: list[dict], habits: list[dict]) -> str:
     open_tasks = [t for t in tasks if not t["done"]]
     lines = [f"<b>Доброго ранку! План на {human_day(day)}</b>", ""]
-    lines += [task_line(t) for t in open_tasks] or ["На сьогодні справ немає — можна спокійно зайнятися собою."]
+    lines += [task_line(t) for t in open_tasks] or ["На сьогодні план ще порожній. Додай 1–3 головні справи — і день складеться легше."]
     if overdue:
         lines += ["", f"<b>Не виконано раніше: {len(overdue)}</b>"]
         lines += [task_line(t) + f" <i>({t['date'][8:]}.{t['date'][5:7]})</i>" for t in overdue[:5]]
@@ -126,3 +126,23 @@ def morning_text(day: str, tasks: list[dict], overdue: list[dict], habits: list[
     else:
         lines += ["", "Гарного дня!"]
     return "\n".join(lines)
+
+
+def welcome_morning_text(first_name: str | None) -> str:
+    name = f", {escape(first_name)}" if first_name else ""
+    return "\n".join([
+        f"<b>Доброго ранку{name}!</b> ☀️",
+        "",
+        "Ritmoza готова допомогти спланувати день.",
+        "Почни з малого: додай 2–3 справи на сьогодні — я нагадаю про них вчасно, а ввечері підкажу, що ще лишилось.",
+        "",
+        "Можна завести й звичку — наприклад, «пити воду» чи «зарядка», — і я рахуватиму твої серії.",
+        "",
+        "<i>Швидко з чату: /add 18:30 Зателефонувати мамі</i>",
+    ])
+
+
+def fill_keyboard(webapp_url: str | None) -> InlineKeyboardMarkup | None:
+    if not webapp_url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Заповнити планер", web_app=WebAppInfo(url=webapp_url))]])
