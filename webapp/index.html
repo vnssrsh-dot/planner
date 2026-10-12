@@ -6,16 +6,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Планер справ</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Manrope:wght@500;600&display=swap">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <!-- Сторінка 1: нагадувалка на сьогодні -->
   <main class="app page" id="page-today">
-    <header class="hello">
+    <header class="hero">
+      <svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.6 4.9 2.9 7.3 9.5 9.5-6.6 2.2-8.9 4.6-9.5 9.5-.6-4.9-2.9-7.3-9.5-9.5 6.6-2.2 8.9-4.6 9.5-9.5Z"/></svg>
+      <div class="hero-date" id="todayDate"></div>
       <h1 id="greeting">Привіт</h1>
-      <div class="hello-date" id="todayDate"></div>
-      <div class="summary" id="summary"></div>
-      <div class="bar" id="summaryBar" hidden><i></i></div>
+      <p class="motto" id="motto"></p>
+      <div class="hero-progress" id="heroProgress" hidden>
+        <span id="progressLabel"></span>
+        <div class="bar"><i id="progressFill"></i></div>
+      </div>
     </header>
 
     <section class="overdue" id="t-overdue" hidden>

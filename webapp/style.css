@@ -11,13 +11,15 @@
   --done: #607D70;      /* виконані завдання */
   --inactive: #B8BDB9;  /* неактивні елементи */
   --radius: 12px;
+  --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
 body {
-  font: 15px/1.45 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font: 400 15px/1.45 var(--font-body);
   padding-bottom: calc(150px + env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
 }
@@ -27,17 +29,31 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
 
 /* ---------- сторінка «Сьогодні» ---------- */
-.hello { padding: 20px 2px 28px; }
-.hello h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
-.hello-date { margin-top: 4px; color: var(--muted); font-size: 14px; }
-.summary { margin-top: 18px; font-size: 15px; }
-.bar { margin-top: 10px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--done); border-radius: 2px; transition: width .4s; }
+.hero {
+  position: relative; margin: 8px 0 28px; padding: 22px 20px 20px;
+  background: var(--accent-soft); border-radius: 18px; overflow: hidden;
+}
+.spark {
+  position: absolute; top: 18px; right: 18px; width: 22px; height: 22px;
+  fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linejoin: round;
+  animation: spark-in .9s ease-out both;
+}
+@keyframes spark-in { from { opacity: 0; transform: rotate(-45deg) scale(.6); } }
+.hero-date { font-size: 13px; color: var(--muted); padding-right: 32px; }
+.hero h1 {
+  margin: 6px 0 0; padding-right: 28px; font: 600 26px/1.2 var(--font-display);
+  letter-spacing: -.02em; overflow-wrap: anywhere; text-wrap: balance;
+}
+.motto { margin: 8px 0 0; color: var(--muted); font-size: 14px; max-width: 34ch; }
+.hero-progress { margin-top: 18px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+.hero-progress span { display: inline-block; }
+.bar { margin-top: 8px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--done); border-radius: 2px; transition: width .5s cubic-bezier(.3,.7,.3,1); }
 
 /* ---------- календар ---------- */
 .calendar { padding: 12px 10px 10px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 10px; }
-.cal-head h1 { font-size: 15px; margin: 0; font-weight: 500; text-transform: capitalize; letter-spacing: .01em; }
+.cal-head h1 { font: 500 15px/1.3 var(--font-display); margin: 0; text-transform: capitalize; letter-spacing: .01em; }
 .icon-btn { width: 32px; height: 32px; border-radius: 8px; font-size: 20px; line-height: 1; color: var(--muted); }
 .icon-btn:active { background: var(--bg); }
 .weekdays, .grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
@@ -64,7 +80,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* ---------- день ---------- */
 .day-head { display: flex; align-items: flex-end; justify-content: space-between; margin: 28px 2px 12px; }
 .day-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.day-head h2 { margin: 4px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.day-head h2 { margin: 4px 0 0; font: 600 20px/1.25 var(--font-display); letter-spacing: -.01em; }
 
 .progress { position: relative; width: 40px; height: 40px; }
 .progress svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -88,10 +104,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: background .15s, border-color .15s;
 }
 .task.done .check, .check.on { background: var(--done); border-color: var(--done); }
+.check.on { animation: fill .28s ease-out; }
+@keyframes fill { 0% { transform: scale(.8); background: transparent; } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
 .task.done .check::after, .check.on::after {
   content: ""; width: 5px; height: 9px; margin-top: -2px;
   border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
 }
+.check.on::after { animation: tick .25s .08s ease-out both; }
+@keyframes tick { from { transform: rotate(45deg) scale(0); } }
+.bump { animation: bump .35s ease-out; }
+@keyframes bump { 40% { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 .task-body { flex: 1; min-width: 0; cursor: pointer; }
 .task-title { overflow-wrap: anywhere; }
 .task.done .task-title { text-decoration: line-through; color: var(--inactive); }
@@ -102,12 +125,19 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .task.done .time { color: var(--inactive); }
 
 .overdue { margin-bottom: 24px; }
-.section-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 0 2px 8px; }
+.section-title { font: 500 14px/1.3 var(--font-display); color: var(--text); padding: 0 2px 10px; }
 .section-title.urgent { color: var(--urgent); }
 .overdue .check { border-color: var(--urgent); }
 .move-btn { flex: none; font-size: 13px; color: var(--accent); padding: 4px 0 4px 8px; }
 
-.empty { text-align: center; color: var(--muted); font-size: 14px; padding: 36px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
+.empty { display: grid; gap: 14px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.empty-row { display: flex; align-items: center; gap: 14px; }
+.empty-icon { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); }
+.empty-icon svg { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.empty-text { min-width: 0; display: grid; gap: 2px; }
+.empty-text b { font: 500 15px/1.3 var(--font-display); color: var(--text); }
+.empty-text span { font-size: 14px; color: var(--muted); }
+.empty-btn { justify-self: start; flex: none; padding: 10px 16px; font-size: 14px; }
 
 .done-block { margin-top: 20px; }
 .done-block summary { color: var(--muted); font-size: 13px; padding: 0 2px 8px; cursor: pointer; list-style: none; }
@@ -130,7 +160,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 @keyframes up { from { transform: translateY(100%); } }
 .sheet-grip { width: 32px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 12px; }
-.sheet h3 { margin: 0 0 16px; font-size: 17px; font-weight: 600; }
+.sheet h3 { margin: 0 0 16px; font: 600 18px/1.3 var(--font-display); }
 .field { display: block; margin-bottom: 14px; flex: 1; min-width: 0; }
 .field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .field i { font-style: normal; color: var(--inactive); }
@@ -143,6 +173,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .row { display: flex; gap: 10px; }
 .sheet-actions { display: flex; gap: 8px; margin-top: 6px; }
 .btn { flex: 1; padding: 12px; border-radius: 10px; font-weight: 500; }
+.btn:focus-visible, .tab:focus-visible, .cell:focus-visible, .check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn.primary { background: var(--accent); color: #fff; }
 .btn.primary:disabled { background: var(--inactive); }
 .btn.ghost { background: var(--accent-soft); color: var(--accent); }

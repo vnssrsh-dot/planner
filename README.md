@@ -31,6 +31,8 @@
 
 Кольори задані змінними на початку `webapp/style.css`.
 
+Шрифти: **Manrope** (привітання, заголовки — 600/500) і **Inter** (текст, дати, кнопки — 400/500), з Google Fonts.
+
 ## Як влаштовано
 
 ```
@@ -82,4 +84,4 @@ webapp/         — Mini App (HTML/CSS/JS без сборки, подстраи�
 
 ## Скріншоти
 
-<img src="docs/today.png" width="260"> <img src="docs/calendar.png" width="260"> <img src="docs/edit.png" width="260">
+<img src="docs/empty.png" width="260"> <img src="docs/today.png" width="260"> <img src="docs/calendar.png" width="260"> <img src="docs/edit.png" width="260">

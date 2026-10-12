@@ -96,6 +96,14 @@ async function reload() {
 /* ---------- відображення ---------- */
 function render() { renderToday(); renderCalendar(); renderCalendarDay(); }
 
+// Змінює текст і коротко «підстрибує», якщо значення справді змінилось
+function setText(el, text) {
+  if (el.textContent === text) return;
+  const had = el.textContent !== "";
+  el.textContent = text;
+  if (had) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+}
+
 function plural(n, one, few, many) {
   const m10 = n % 10, m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return one;
@@ -163,6 +171,30 @@ const GREETINGS = {
   ],
 };
 
+/* Фраза дня: спокійна, без тиску. Залежить від дати — протягом дня не змінюється. */
+const MOTTOS = [
+  "Не обовʼязково встигнути все. Достатньо зробити перший крок.",
+  "Спокійно, все по порядку.",
+  "Сьогодні можна почати з малого.",
+  "Одна справа за раз — і день складеться.",
+  "Маленькі кроки теж рухають уперед.",
+  "Почнемо з головного.",
+  "Не поспішай. Головне ти встигнеш.",
+  "Простий план — спокійний день.",
+  "Відпочинок теж частина плану.",
+  "Зроби сьогодні те, за що завтра скажеш собі дякую.",
+  "Крок за кроком.",
+  "Хай цей день буде легким.",
+  "Достатньо зробити трохи більше, ніж нічого.",
+  "Добре сплановане — наполовину зроблене.",
+];
+
+function mottoFor(ds) {
+  let h = 0;
+  for (const c of ds) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return MOTTOS[h % MOTTOS.length];
+}
+
 function dayPart(h = new Date().getHours()) {
   if (h >= 5 && h < 12) return "morning";
   if (h >= 12 && h < 18) return "day";
@@ -208,10 +240,38 @@ function renderDayList(prefix, ds, tasks) {
   $(`${prefix}-doneBlock`).hidden = !done.length;
   $(`${prefix}-doneSummary`).textContent = `Виконано · ${done.length}`;
 
-  const empty = $(`${prefix}-empty`);
-  empty.hidden = open.length > 0;
-  empty.textContent = tasks.length ? "Усе виконано" : isToday ? "На сьогодні планів немає" : "Нічого не заплановано";
+  renderEmpty($(`${prefix}-empty`), ds, tasks, open);
   return { open, done };
+}
+
+const ICONS = {
+  calendar: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9 14.5l2 2 4-4"/></svg>',
+  done: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>',
+  sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>',
+};
+
+// Порожній стан: легка картка з іконкою, коротким текстом і кнопкою
+function renderEmpty(el, ds, tasks, open) {
+  el.hidden = open.length > 0;
+  if (!el.hidden) {
+    const isToday = ds === state.today;
+    const [icon, title, text, withBtn] = tasks.length
+      ? ["done", "Усе виконано", "Чудова робота. Решта дня — для тебе.", false]
+      : isToday
+        ? ["calendar", "Поки що вільний день", "Можеш відпочити або запланувати щось нове.", true]
+        : ds < state.today
+          ? ["sun", "Цей день був вільним", "Тут нічого не було заплановано.", false]
+          : ["calendar", "Нічого не заплановано", "Додай справу на цей день, коли буде потрібно.", true];
+    el.innerHTML = `
+      <div class="empty-row">
+        <span class="empty-icon">${ICONS[icon]}</span>
+        <div class="empty-text"><b></b><span></span></div>
+      </div>
+      ${withBtn ? '<button class="btn primary empty-btn" type="button">+ Додати завдання</button>' : ""}`;
+    el.querySelector("b").textContent = title;
+    el.querySelector(".empty-text span").textContent = text;
+    el.querySelector(".empty-btn")?.addEventListener("click", () => openSheet(null));
+  }
 }
 
 function renderToday() {
@@ -221,14 +281,13 @@ function renderToday() {
 
   const { open, done } = renderDayList("t", state.today, tasks);
   const n = tasks.length;
-  $("summary").textContent = !n
-    ? "Можна відпочити або запланувати щось нове."
-    : !open.length
-      ? `Усі ${n} ${plural(n, "справу", "справи", "справ")} виконано. Чудовий день!`
-      : `На сьогодні ${open.length === n ? "" : "залишилось "}${open.length} ${plural(open.length, "справа", "справи", "справ")}` +
-        (done.length ? ` з ${n}` : "") + ".";
-  $("summaryBar").hidden = !n;
-  $("summaryBar").firstElementChild.style.width = n ? `${(done.length / n) * 100}%` : "0";
+  $("motto").textContent = mottoFor(state.today);
+  // прогрес показуємо лише коли є справи — щоб не тиснути порожнім лічильником
+  $("heroProgress").hidden = !n;
+  if (n) {
+    setText($("progressLabel"), !open.length ? `Виконано всі ${n} з ${n}` : `Виконано ${done.length} з ${n}`);
+    $("progressFill").style.width = `${(done.length / n) * 100}%`;
+  }
   $("t-listTitle").hidden = !open.length;
 
   const showOverdue = state.overdue.length > 0;
@@ -237,7 +296,7 @@ function renderToday() {
 
   const badge = $("todayBadge");
   badge.hidden = !open.length;
-  badge.textContent = open.length;
+  setText(badge, String(open.length));
 }
 
 function renderCalendar() {
@@ -351,7 +410,13 @@ function shiftMonth(n) {
 async function toggleDone(t, li, check) {
   const next = !t.done;
   haptic(next ? "success" : "light");
-  if (next) { check.classList.add("on"); li.classList.add("leaving"); await new Promise((r) => setTimeout(r, 260)); }
+  if (next) {
+    // спершу чекбокс плавно заповнюється, потім рядок відʼїжджає
+    check.classList.add("on");
+    await new Promise((r) => setTimeout(r, 280));
+    li.classList.add("leaving");
+    await new Promise((r) => setTimeout(r, 240));
+  }
   try {
     const updated = await api("PATCH", `/api/tasks/${t.id}`, { done: next });
     await reload();
