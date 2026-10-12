@@ -20,6 +20,16 @@
   - увечері (за замовчуванням о 21:00 за місцевим часом), якщо на сьогодні лишилися невиконані завдання, — з кнопками «✓» і «→ Завтра» прямо в чаті.
 - Команди бота: `/today` — план на сьогодні, `/add 18:30 Зателефонувати мамі`, `/tomorrow Купити хліб`.
 
+## Демо в браузері (GitHub Pages)
+
+У папці `docs/` лежать автономні демо (дані зберігаються в браузері, без сервера):
+- `docs/index.html` — заповнений планер з прикладами;
+- `docs/new.html` — порожній, як у нового користувача.
+
+Щоб опублікувати: **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
+гілка `claude/telegram-task-planner-proto-3mflfv`, папка `/docs` → **Save**.
+Через 1–2 хвилини демо буде за адресою https://vnssrsh-dot.github.io/planner/ (порожнє — `/planner/new.html`).
+
 ## Бренд
 
 - `webapp/brand/mark.png`, `webapp/brand/wordmark.png` — знак і напис Ritmoza (прозорий фон).
