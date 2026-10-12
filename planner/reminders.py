@@ -9,7 +9,7 @@ from aiogram import Bot
 from .config import Config
 from .db import Database
 from .timeutil import local_now
-from .views import day_text, tasks_keyboard
+from .views import day_text, habits_keyboard, habits_text, tasks_keyboard
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,12 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
             await bot.send_message(
                 user["chat_id"], text,
                 reply_markup=tasks_keyboard(tasks, cfg.webapp_url or None, with_tomorrow=True),
+            )
+        habits = await db.unmarked_habits(user["id"], today)
+        if habits:
+            await bot.send_message(
+                user["chat_id"], habits_text(habits),
+                reply_markup=habits_keyboard(habits, today, cfg.webapp_url or None),
             )
 
 

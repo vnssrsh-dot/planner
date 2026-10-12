@@ -140,6 +140,74 @@ async def delete_task(request: web.Request):
     return web.json_response({"ok": True})
 
 
+HABIT_KINDS = ("build", "quit")
+
+
+def _habit_fields(payload: dict, *, partial: bool) -> dict:
+    out: dict = {}
+    if "title" in payload or not partial:
+        title = str(payload.get("title", "")).strip()
+        if not title:
+            raise _bad("title required")
+        out["title"] = title[:120]
+    if "kind" in payload or not partial:
+        kind = payload.get("kind", "build")
+        if kind not in HABIT_KINDS:
+            raise _bad("bad kind")
+        out["kind"] = kind
+    return out
+
+
+async def _user_today(request: web.Request) -> str:
+    db, cfg = request.app[DB_KEY], request.app[CFG_KEY]
+    user = await db.get_user(request["user_id"])
+    return local_now(user["tz"], cfg.default_tz).date().isoformat()
+
+
+@routes.get("/api/habits")
+async def list_habits(request: web.Request):
+    return web.json_response(await request.app[DB_KEY].habits(request["user_id"]))
+
+
+@routes.post("/api/habits")
+async def create_habit(request: web.Request):
+    data = _habit_fields(await _json(request), partial=False)
+    habit = await request.app[DB_KEY].create_habit(
+        request["user_id"], start_date=await _user_today(request), **data
+    )
+    return web.json_response(habit, status=201)
+
+
+@routes.patch("/api/habits/{id:\\d+}")
+async def update_habit(request: web.Request):
+    data = _habit_fields(await _json(request), partial=True)
+    habit = await request.app[DB_KEY].update_habit(request["user_id"], int(request.match_info["id"]), **data)
+    if not habit:
+        raise web.HTTPNotFound()
+    return web.json_response(habit)
+
+
+@routes.delete("/api/habits/{id:\\d+}")
+async def delete_habit(request: web.Request):
+    if not await request.app[DB_KEY].delete_habit(request["user_id"], int(request.match_info["id"])):
+        raise web.HTTPNotFound()
+    return web.json_response({"ok": True})
+
+
+@routes.put("/api/habits/{id:\\d+}/marks/{date}")
+@routes.delete("/api/habits/{id:\\d+}/marks/{date}")
+async def habit_mark(request: web.Request):
+    day = _valid_date(request.match_info["date"])
+    if day > await _user_today(request):
+        raise _bad("future date")
+    habit = await request.app[DB_KEY].set_habit_mark(
+        request["user_id"], int(request.match_info["id"]), day, request.method == "PUT"
+    )
+    if not habit:
+        raise web.HTTPNotFound()
+    return web.json_response(habit)
+
+
 @routes.get("/")
 async def index(request: web.Request):
     return web.FileResponse(WEBAPP_DIR / "index.html")

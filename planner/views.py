@@ -44,3 +44,22 @@ def tasks_keyboard(
     if webapp_url:
         rows.append([InlineKeyboardButton(text="Відкрити планер", web_app=WebAppInfo(url=webapp_url))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def habits_text(habits: list[dict]) -> str:
+    lines = ["<b>Звички, які сьогодні ще не відмічені</b>", ""]
+    for h in habits:
+        prefix = "без зриву: " if h["kind"] == "quit" else ""
+        lines.append(f"• {prefix}{escape(h['title'])}")
+    lines += ["", "Відмітьте, якщо вже зробили — серія не перерветься."]
+    return "\n".join(lines)
+
+
+def habits_keyboard(habits: list[dict], day: str, webapp_url: str | None) -> InlineKeyboardMarkup:
+    rows = []
+    for h in habits:
+        title = h["title"] if len(h["title"]) <= 30 else h["title"][:29] + "…"
+        rows.append([InlineKeyboardButton(text=f"✓ {title}", callback_data=f"habit:{h['id']}:{day}")])
+    if webapp_url:
+        rows.append([InlineKeyboardButton(text="Відкрити звички", web_app=WebAppInfo(url=webapp_url + "#habits"))])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

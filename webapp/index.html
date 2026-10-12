@@ -75,6 +75,54 @@
     </details>
   </main>
 
+  <!-- Сторінка 3: звички -->
+  <main class="app page" id="page-habits" hidden>
+    <header class="page-head">
+      <h2>Звички</h2>
+      <p id="habitsSummary"></p>
+    </header>
+
+    <div class="habit-empty" id="habitEmpty" hidden>
+      <div class="empty-row">
+        <span class="empty-icon lav"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6"/><path d="M17.5 3v3.5H14M6.5 21v-3.5H10"/></svg></span>
+        <div class="empty-text">
+          <b>Додай першу звичку</b>
+          <span>Щоденні справи, які хочеться робити регулярно, або шкідлива звичка, від якої хочеш позбутися.</span>
+        </div>
+      </div>
+      <button class="btn primary empty-btn" type="button" id="habitEmptyBtn">+ Нова звичка</button>
+    </div>
+
+    <div class="chips" id="habitChips" role="tablist"></div>
+
+    <section class="habit-card" id="habitCard" hidden>
+      <div class="habit-top">
+        <div>
+          <div class="habit-kind" id="habitKind"></div>
+          <h3 id="habitTitle"></h3>
+        </div>
+        <button class="icon-btn edit-btn" id="habitEdit" aria-label="Редагувати звичку">
+          <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/></svg>
+        </button>
+      </div>
+      <div class="stats">
+        <div><b id="statStreak">0</b><span id="statStreakLabel">днів поспіль</span></div>
+        <div><b id="statBest">0</b><span>рекорд</span></div>
+        <div><b id="statRate">0%</b><span>за 30 днів</span></div>
+      </div>
+      <button class="habit-toggle" id="habitToggle" type="button"></button>
+    </section>
+
+    <section class="heat card" id="habitHeat" hidden>
+      <div class="heat-head">
+        <span>Останні 5 тижнів</span>
+        <span class="heat-hint">Натисни на день, щоб виправити</span>
+      </div>
+      <div class="weekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Нд</span></div>
+      <div class="heat-grid" id="heatGrid"></div>
+    </section>
+  </main>
+
   <button class="fab" id="addBtn" aria-label="Додати завдання">+</button>
 
   <nav class="tabbar">
@@ -86,6 +134,11 @@
     <button class="tab" data-page="calendar" aria-label="Календар">
       <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
       <span>Календар</span>
+    </button>
+    <button class="tab" data-page="habits" aria-label="Звички">
+      <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6"/><path d="M17.5 3v3.5H14M6.5 21v-3.5H10"/></svg>
+      <span>Звички</span>
+      <b class="badge" id="habitsBadge" hidden></b>
     </button>
   </nav>
 
@@ -109,6 +162,24 @@
       <button type="button" class="btn danger" id="deleteBtn" hidden>Видалити</button>
       <button type="button" class="btn ghost" id="cancelBtn">Скасувати</button>
       <button type="submit" class="btn primary" id="saveBtn">Зберегти</button>
+    </div>
+  </form>
+
+  <form class="sheet" id="habitSheet" hidden autocomplete="off">
+    <div class="sheet-grip"></div>
+    <h3 id="habitSheetTitle">Нова звичка</h3>
+    <div class="segmented" role="radiogroup" aria-label="Тип звички">
+      <label><input type="radio" name="kind" value="build" checked><span>Хочу робити</span></label>
+      <label><input type="radio" name="kind" value="quit"><span>Хочу кинути</span></label>
+    </div>
+    <label class="field">
+      <span id="habitTitleLabel">Що робити регулярно</span>
+      <input name="title" maxlength="120" required placeholder="Наприклад, пити 2 л води">
+    </label>
+    <div class="sheet-actions">
+      <button type="button" class="btn danger" id="habitDeleteBtn" hidden>Видалити</button>
+      <button type="button" class="btn ghost" id="habitCancelBtn">Скасувати</button>
+      <button type="submit" class="btn primary" id="habitSaveBtn">Зберегти</button>
     </div>
   </form>
 

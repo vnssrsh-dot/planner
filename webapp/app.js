@@ -22,6 +22,9 @@ const state = {
   todayTasks: [],
   name: "",
   page: "today",
+  habits: [],           // [{id, title, kind, start_date, marks: [date]}]
+  habitSel: null,       // id вибраної звички
+  editingHabit: null,
   editing: null,        // завдання, що редагується, або null
 };
 
@@ -88,13 +91,17 @@ async function loadToday() {
   state.overdue = overdue;
 }
 
+async function loadHabits() {
+  state.habits = await api("GET", "/api/habits");
+}
+
 async function reload() {
-  await Promise.all([loadMonth(), loadToday()]);
+  await Promise.all([loadMonth(), loadToday(), loadHabits()]);
   render();
 }
 
 /* ---------- відображення ---------- */
-function render() { renderToday(); renderCalendar(); renderCalendarDay(); }
+function render() { renderToday(); renderCalendar(); renderCalendarDay(); renderHabits(); }
 
 // Змінює текст і коротко «підстрибує», якщо значення справді змінилось
 function setText(el, text) {
@@ -271,7 +278,9 @@ function renderDayList(prefix, ds, tasks) {
   const done = tasks.filter((t) => t.done);
   const late = (t) => (isToday && t.time && t.time < nowHM()) || ds < state.today;
 
-  $(`${prefix}-taskList`).replaceChildren(...open.map((t) => taskRow(t, { late: late(t) })));
+  // «Далі»: найближча справа з часом сьогодні — про неї прийде нагадування
+  const next = isToday ? open.find((t) => t.time && t.time >= nowHM()) : null;
+  $(`${prefix}-taskList`).replaceChildren(...open.map((t) => taskRow(t, { late: late(t), next: t === next })));
   $(`${prefix}-doneList`).replaceChildren(...done.map((t) => taskRow(t)));
   $(`${prefix}-doneBlock`).hidden = !done.length;
   $(`${prefix}-doneSummary`).textContent = `Виконано · ${done.length}`;
@@ -389,7 +398,7 @@ function renderCalendarDay() {
 
 function taskRow(t, opts = {}) {
   const li = document.createElement("li");
-  li.className = "task" + (t.done ? " done" : "");
+  li.className = "task" + (t.done ? " done" : "") + (opts.next ? " next" : "");
   li.dataset.id = t.id;
 
   const check = document.createElement("button");
@@ -413,6 +422,7 @@ function taskRow(t, opts = {}) {
   li.append(check);
   if (t.time) li.append(Object.assign(document.createElement("span"), { className: "time" + (opts.late && !t.done ? " late" : ""), textContent: t.time }));
   li.append(body);
+  if (opts.next) li.append(Object.assign(document.createElement("span"), { className: "next-label", textContent: "Далі" }));
 
   if (opts.overdue) {
     const move = document.createElement("button");
@@ -501,6 +511,8 @@ function openSheet(task) {
 
 function closeSheet() {
   form.hidden = true;
+  $("habitSheet").hidden = true;
+  state.editingHabit = null;
   $("backdrop").hidden = true;
   tg?.BackButton?.hide();
   state.editing = null;
@@ -541,15 +553,199 @@ $("deleteBtn").onclick = () => {
 $("cancelBtn").onclick = closeSheet;
 $("backdrop").onclick = closeSheet;
 tg?.BackButton?.onClick(closeSheet);
-$("addBtn").onclick = () => openSheet(null);
+$("addBtn").onclick = () => (state.page === "habits" ? openHabitSheet(null) : openSheet(null));
 $("prevMonth").onclick = () => shiftMonth(-1);
 $("nextMonth").onclick = () => shiftMonth(1);
 $("gotoToday").onclick = () => selectDay(state.today);
 
+/* ---------- звички ---------- */
+const habitSet = (h) => new Set(h.marks);
+
+function habitStreak(h) {
+  const set = habitSet(h);
+  let d = set.has(state.today) ? state.today : addDays(state.today, -1);
+  let n = 0;
+  while (set.has(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+function habitBest(h) {
+  let best = 0, run = 0, prev = null;
+  for (const d of [...h.marks].sort()) {
+    run = prev && addDays(prev, 1) === d ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  return best;
+}
+
+// Яку частку днів за останні 30 (але не раніше старту) звичку відмічено
+function habitRate(h) {
+  const from = [addDays(state.today, -29), h.start_date].sort()[1];
+  if (from > state.today) return 0;
+  const days = Math.round((toDate(state.today) - toDate(from)) / 864e5) + 1;
+  const count = h.marks.filter((d) => d >= from && d <= state.today).length;
+  return Math.round((count / days) * 100);
+}
+
+const markedToday = (h) => h.marks.includes(state.today);
+
+function renderHabits() {
+  const hs = state.habits;
+  if (!hs.some((h) => h.id === state.habitSel)) state.habitSel = hs[0]?.id ?? null;
+  const done = hs.filter(markedToday).length;
+
+  $("habitsSummary").textContent = !hs.length
+    ? "Регулярність важливіша за ідеальність."
+    : done === hs.length ? `Сьогодні відмічено всі ${hs.length}. Так тримати!` : `Сьогодні відмічено ${done} з ${hs.length}`;
+  const badge = $("habitsBadge");
+  badge.hidden = !(hs.length - done);
+  setText(badge, String(hs.length - done));
+
+  $("habitEmpty").hidden = hs.length > 0;
+  $("habitChips").hidden = $("habitCard").hidden = $("habitHeat").hidden = !hs.length;
+  if (!hs.length) return;
+
+  // перемикач між звичками
+  $("habitChips").replaceChildren(...hs.map((h) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (h.id === state.habitSel ? " active" : "") + (markedToday(h) ? " marked" : "");
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", h.id === state.habitSel);
+    b.textContent = h.title;
+    b.onclick = () => { state.habitSel = h.id; haptic("light"); renderHabits(); };
+    return b;
+  }));
+
+  const h = hs.find((x) => x.id === state.habitSel);
+  const quit = h.kind === "quit";
+  const streak = habitStreak(h);
+  $("habitKind").textContent = quit ? "Позбуваюсь" : "Корисна звичка";
+  $("habitTitle").textContent = h.title;
+  setText($("statStreak"), String(streak));
+  $("statStreakLabel").textContent = quit
+    ? plural(streak, "день без зриву", "дні без зривів", "днів без зривів")
+    : plural(streak, "день поспіль", "дні поспіль", "днів поспіль");
+  setText($("statBest"), String(habitBest(h)));
+  setText($("statRate"), `${habitRate(h)}%`);
+
+  const on = markedToday(h);
+  const tgl = $("habitToggle");
+  tgl.classList.toggle("on", on);
+  tgl.textContent = on
+    ? (quit ? "Сьогодні без зриву ✓" : "Сьогодні зроблено ✓")
+    : (quit ? "Сьогодні тримаюсь" : "Відмітити сьогодні");
+  tgl.onclick = () => toggleHabitDay(h, state.today);
+
+  renderHeat(h);
+}
+
+function renderHeat(h) {
+  const set = habitSet(h);
+  const monIdx = (toDate(state.today).getUTCDay() + 6) % 7;
+  const end = addDays(state.today, 6 - monIdx); // неділя поточного тижня
+  const start = addDays(end, -34);
+  const cells = [];
+  for (let i = 0; i < 35; i++) {
+    const ds = addDays(start, i);
+    const c = document.createElement("button");
+    c.className = "heat-cell";
+    c.textContent = toDate(ds).getUTCDate();
+    if (ds > state.today) { c.classList.add("future"); c.disabled = true; }
+    else {
+      if (set.has(ds)) c.classList.add("on");
+      else if (ds < h.start_date) c.classList.add("before");
+      c.onclick = () => toggleHabitDay(h, ds);
+    }
+    if (ds === state.today) c.classList.add("today");
+    c.setAttribute("aria-label", `${human(ds)}${set.has(ds) ? ", відмічено" : ""}`);
+    cells.push(c);
+  }
+  $("heatGrid").replaceChildren(...cells);
+}
+
+async function toggleHabitDay(h, ds) {
+  const on = !h.marks.includes(ds);
+  haptic(on ? "success" : "light");
+  // одразу показуємо результат, сервер підтверджує у фоні
+  h.marks = on ? [...h.marks, ds] : h.marks.filter((d) => d !== ds);
+  if (on && ds < h.start_date) h.start_date = ds;
+  renderHabits();
+  if (on && ds === state.today) {
+    const t = $("habitToggle");
+    t.classList.remove("pop"); void t.offsetWidth; t.classList.add("pop");
+  }
+  try {
+    const fresh = await api(on ? "PUT" : "DELETE", `/api/habits/${h.id}/marks/${ds}`);
+    Object.assign(h, fresh);
+    renderHabits();
+  } catch (e) { showError(e); await loadHabits(); renderHabits(); }
+}
+
+/* форма звички */
+const hform = $("habitSheet");
+
+function syncHabitKind() {
+  const quit = hform.elements.kind.value === "quit";
+  $("habitTitleLabel").textContent = quit ? "Від чого хочеш позбутися" : "Що робити регулярно";
+  hform.elements.title.placeholder = quit ? "Наприклад, курити або гортати стрічку" : "Наприклад, пити 2 л води";
+}
+hform.querySelectorAll("input[name=kind]").forEach((r) => (r.onchange = syncHabitKind));
+
+function openHabitSheet(h) {
+  state.editingHabit = h || null;
+  $("habitSheetTitle").textContent = h ? "Редагувати звичку" : "Нова звичка";
+  hform.elements.title.value = h?.title || "";
+  hform.elements.kind.value = h?.kind || "build";
+  syncHabitKind();
+  const del = $("habitDeleteBtn");
+  del.hidden = !h;
+  delete del.dataset.armed;
+  del.textContent = "Видалити";
+  $("backdrop").hidden = false;
+  hform.hidden = false;
+  tg?.BackButton?.show();
+  if (!h) setTimeout(() => hform.elements.title.focus(), 50);
+}
+
+hform.onsubmit = async (e) => {
+  e.preventDefault();
+  const data = { title: hform.elements.title.value.trim(), kind: hform.elements.kind.value };
+  if (!data.title) return;
+  $("habitSaveBtn").disabled = true;
+  try {
+    const saved = state.editingHabit
+      ? await api("PATCH", `/api/habits/${state.editingHabit.id}`, data)
+      : await api("POST", "/api/habits", data);
+    state.habitSel = saved.id;
+    haptic("success");
+    closeSheet();
+    await loadHabits();
+    renderHabits();
+  } catch (err) { showError(err); }
+  finally { $("habitSaveBtn").disabled = false; }
+};
+
+// видалення у два натискання — без системних діалогів
+$("habitDeleteBtn").onclick = async () => {
+  const btn = $("habitDeleteBtn");
+  if (!btn.dataset.armed) { btn.dataset.armed = "1"; btn.textContent = "Точно?"; return; }
+  try {
+    await api("DELETE", `/api/habits/${state.editingHabit.id}`);
+    closeSheet();
+    await loadHabits();
+    renderHabits();
+  } catch (e) { showError(e); }
+};
+$("habitCancelBtn").onclick = closeSheet;
+$("habitEmptyBtn").onclick = () => openHabitSheet(null);
+$("habitEdit").onclick = () => openHabitSheet(state.habits.find((h) => h.id === state.habitSel));
+
 /* ---------- нижнє меню ---------- */
+const PAGES = ["today", "calendar", "habits"];
 function showPage(page) {
   state.page = page;
-  for (const p of ["today", "calendar"]) $(`page-${p}`).hidden = p !== page;
+  for (const p of PAGES) $(`page-${p}`).hidden = p !== page;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
   try { localStorage.setItem("page", page); } catch (_) {}
   window.scrollTo(0, 0);
@@ -557,7 +753,9 @@ function showPage(page) {
 document.querySelectorAll(".tab").forEach((b) => (b.onclick = () => { if (state.page !== b.dataset.page) { haptic("light"); showPage(b.dataset.page); } }));
 let savedPage = "today";
 try { savedPage = localStorage.getItem("page") || "today"; } catch (_) {}
-showPage(savedPage === "calendar" ? "calendar" : "today");
+// посилання з бота «Відкрити звички» веде одразу на вкладку
+if (location.hash === "#habits") savedPage = "habits";
+showPage(PAGES.includes(savedPage) ? savedPage : "today");
 
 /* ---------- старт ---------- */
 async function init() {

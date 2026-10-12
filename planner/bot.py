@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from .config import Config
 from .db import Database
 from .timeutil import human_day, local_now, tomorrow_of
-from .views import day_text, tasks_keyboard
+from .views import day_text, habits_keyboard, habits_text, tasks_keyboard
 
 router = Router()
 
@@ -122,3 +122,18 @@ async def cb_tomorrow(cb: CallbackQuery, db: Database, cfg: Config) -> None:
     task = await db.update_task(uid, int(cb.data.split(":")[1]), date=tomorrow)
     await cb.answer("Перенесено на завтра" if task else "Завдання не знайдено")
     await _refresh(cb, db, cfg)
+
+
+@router.callback_query(F.data.startswith("habit:"))
+async def cb_habit(cb: CallbackQuery, db: Database, cfg: Config) -> None:
+    _, habit_id, day = cb.data.split(":")
+    habit = await db.set_habit_mark(cb.from_user.id, int(habit_id), day, True)
+    await cb.answer(f"Відмічено: {habit['title']}" if habit else "Звичку не знайдено")
+    left = await db.unmarked_habits(cb.from_user.id, day)
+    try:
+        if left:
+            await cb.message.edit_text(habits_text(left), reply_markup=habits_keyboard(left, day, cfg.webapp_url or None))
+        else:
+            await cb.message.edit_text("<b>Усі звички на сьогодні відмічено.</b> Так тримати!")
+    except Exception:
+        pass

@@ -29,6 +29,23 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks(user_id, date);
+
+-- Звички: kind = 'build' (робити регулярно) або 'quit' (позбутися шкідливої)
+CREATE TABLE IF NOT EXISTS habits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    title      TEXT NOT NULL,
+    kind       TEXT NOT NULL DEFAULT 'build',
+    start_date TEXT NOT NULL,                -- YYYY-MM-DD, з якого дня рахуємо
+    created_at TEXT NOT NULL
+);
+
+-- Відмітки: звичку виконано / день без зриву
+CREATE TABLE IF NOT EXISTS habit_marks (
+    habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    date     TEXT NOT NULL,
+    PRIMARY KEY (habit_id, date)
+);
 """
 
 TASK_FIELDS = ("id", "date", "time", "title", "note", "done", "done_at")
@@ -171,3 +188,70 @@ class Database:
     async def mark_reminded(self, task_id: int) -> None:
         await self.conn.execute("UPDATE tasks SET reminded = 1 WHERE id = ?", (task_id,))
         await self.conn.commit()
+
+    # ---------- habits ----------
+
+    async def habits(self, user_id: int) -> list[dict]:
+        cur = await self.conn.execute(
+            "SELECT id, title, kind, start_date FROM habits WHERE user_id = ? ORDER BY id", (user_id,)
+        )
+        habits = [dict(r) for r in await cur.fetchall()]
+        if not habits:
+            return []
+        cur = await self.conn.execute(
+            f"SELECT habit_id, date FROM habit_marks WHERE habit_id IN ({','.join('?' * len(habits))}) ORDER BY date",
+            [h["id"] for h in habits],
+        )
+        marks: dict[int, list[str]] = {}
+        for r in await cur.fetchall():
+            marks.setdefault(r["habit_id"], []).append(r["date"])
+        for h in habits:
+            h["marks"] = marks.get(h["id"], [])
+        return habits
+
+    async def get_habit(self, user_id: int, habit_id: int) -> dict | None:
+        return next((h for h in await self.habits(user_id) if h["id"] == habit_id), None)
+
+    async def create_habit(self, user_id: int, *, title: str, kind: str, start_date: str) -> dict:
+        cur = await self.conn.execute(
+            "INSERT INTO habits (user_id, title, kind, start_date, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, title, kind, start_date, _now()),
+        )
+        await self.conn.commit()
+        return await self.get_habit(user_id, cur.lastrowid)
+
+    async def update_habit(self, user_id: int, habit_id: int, **fields: Any) -> dict | None:
+        allowed = {k: v for k, v in fields.items() if k in ("title", "kind")}
+        if allowed:
+            sets = ", ".join(f"{k} = ?" for k in allowed)
+            await self.conn.execute(
+                f"UPDATE habits SET {sets} WHERE id = ? AND user_id = ?", (*allowed.values(), habit_id, user_id)
+            )
+            await self.conn.commit()
+        return await self.get_habit(user_id, habit_id)
+
+    async def delete_habit(self, user_id: int, habit_id: int) -> bool:
+        cur = await self.conn.execute("DELETE FROM habits WHERE id = ? AND user_id = ?", (habit_id, user_id))
+        if cur.rowcount:
+            await self.conn.execute("DELETE FROM habit_marks WHERE habit_id = ?", (habit_id,))
+        await self.conn.commit()
+        return cur.rowcount > 0
+
+    async def set_habit_mark(self, user_id: int, habit_id: int, date: str, on: bool) -> dict | None:
+        if not await self.get_habit(user_id, habit_id):
+            return None
+        if on:
+            await self.conn.execute(
+                "INSERT OR IGNORE INTO habit_marks (habit_id, date) VALUES (?, ?)", (habit_id, date)
+            )
+            # відмітка раніше старту — зсуваємо старт, щоб статистика була чесною
+            await self.conn.execute(
+                "UPDATE habits SET start_date = ? WHERE id = ? AND start_date > ?", (date, habit_id, date)
+            )
+        else:
+            await self.conn.execute("DELETE FROM habit_marks WHERE habit_id = ? AND date = ?", (habit_id, date))
+        await self.conn.commit()
+        return await self.get_habit(user_id, habit_id)
+
+    async def unmarked_habits(self, user_id: int, date: str) -> list[dict]:
+        return [h for h in await self.habits(user_id) if date not in h["marks"] and h["start_date"] <= date]

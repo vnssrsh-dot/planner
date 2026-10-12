@@ -10,6 +10,10 @@
   --urgent: #C45D56;    /* термінові завдання */
   --done: #607D70;      /* виконані завдання */
   --inactive: #B8BDB9;  /* неактивні елементи */
+  --blue: #DCE7F5;      /* календар, плани, інформаційні картки */
+  --apricot: #F4E2C8;   /* важливе, нагадування, «далі» */
+  --lavender: #EBDDF3;  /* звички, особисті цілі */
+  --coral: #F2DAD7;     /* термінове, мʼякі попередження */
   --radius: 12px;
   --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -65,7 +69,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .cell.other { color: var(--inactive); }
 .cell.today .num { color: var(--accent); font-weight: 600; }
-.cell.today:not(.selected) { box-shadow: inset 0 0 0 1px var(--accent); }
+.cell.today:not(.selected) { background: var(--blue); }
 .cell.selected { background: var(--accent); }
 .cell.selected .num { color: #fff; font-weight: 500; }
 .cell .dots { position: absolute; bottom: 4px; display: flex; gap: 3px; height: 4px; }
@@ -120,18 +124,29 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .task.done .task-title { text-decoration: line-through; color: var(--inactive); }
 .task-meta { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 1px; }
 .task-meta .note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.time { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 38px; }
-.time.late { color: var(--urgent); }
+.time {
+  flex: none; font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums;
+  background: var(--blue); padding: 2px 7px; border-radius: 6px;
+}
+.time.late { color: var(--urgent); background: var(--coral); }
+.task.done .time { background: var(--bg); }
+.task.next { background: color-mix(in srgb, var(--apricot) 55%, var(--card)); }
+.task.next .time { background: var(--apricot); }
+.next-label { flex: none; font-size: 11px; color: #8A6A3E; background: var(--apricot); padding: 2px 8px; border-radius: 10px; }
 .task.done .time { color: var(--inactive); }
 
 .overdue { margin-bottom: 24px; }
 .section-title { font: 500 14px/1.3 var(--font-display); color: var(--text); padding: 0 2px 10px; }
 .section-title.urgent { color: var(--urgent); }
+.overdue .list { background: var(--coral); border-color: transparent; }
+.overdue .task { border-color: color-mix(in srgb, var(--urgent) 15%, transparent); }
 .overdue .check { border-color: var(--urgent); }
+.overdue .task-meta { color: color-mix(in srgb, var(--urgent) 70%, var(--muted)); }
 .move-btn { flex: none; font-size: 13px; color: var(--accent); padding: 4px 0 4px 8px; }
 
 .empty { display: grid; gap: 14px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
 .empty-row { display: flex; align-items: center; gap: 14px; }
+.empty-icon.lav { background: var(--lavender); }
 .empty-icon { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); }
 .empty-icon svg { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .empty-text { min-width: 0; display: grid; gap: 2px; }
@@ -215,5 +230,64 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: absolute; top: 7px; left: calc(50% + 8px); min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; line-height: 16px;
 }
+
+/* ---------- сторінка «Звички» ---------- */
+.page-head { padding: 12px 2px 18px; }
+.page-head h2 { margin: 0; font: 600 26px/1.2 var(--font-display); letter-spacing: -.02em; }
+.page-head p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+.habit-empty { display: grid; gap: 14px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+
+.chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 14px; padding: 2px 16px 4px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 220px;
+  padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--line);
+  font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .2s, border-color .2s;
+}
+.chip.marked::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
+.chip.active { background: var(--lavender); border-color: color-mix(in srgb, #8E6FA8 35%, transparent); font-weight: 500; }
+
+.habit-card { background: var(--lavender); border-radius: 18px; padding: 18px 18px 16px; }
+.habit-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.habit-top > div { min-width: 0; }
+.habit-kind { font-size: 12px; color: #6E5A80; letter-spacing: .02em; }
+.habit-card h3 { margin: 4px 0 0; font: 600 21px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.edit-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; color: #6E5A80; background: color-mix(in srgb, var(--card) 55%, transparent); }
+.edit-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0 16px; }
+.stats div { background: color-mix(in srgb, var(--card) 70%, transparent); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.stats b { display: inline-block; justify-self: start; font: 600 22px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.stats span { font-size: 12px; color: var(--muted); line-height: 1.25; }
+
+.habit-toggle {
+  width: 100%; padding: 13px; border-radius: 12px; font-weight: 500;
+  background: var(--accent); color: #fff; transition: background .25s, color .25s;
+}
+.habit-toggle.on { background: var(--card); color: var(--accent); }
+.habit-toggle.pop { animation: pop .4s ease-out; }
+@keyframes pop { 30% { transform: scale(.97); } 70% { transform: scale(1.02); } }
+
+.heat { margin-top: 14px; padding: 14px 12px 12px; }
+.heat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 0 4px 10px; }
+.heat-head span:first-child { font: 500 14px/1.3 var(--font-display); }
+.heat-hint { font-size: 12px; color: var(--inactive); }
+.heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.heat-cell {
+  aspect-ratio: 1; max-width: 100%; border-radius: 9px; background: var(--bg);
+  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; transition: background .2s, color .2s;
+}
+.heat-cell.on { background: var(--done); color: #fff; }
+.heat-cell.before { color: var(--inactive); background: transparent; }
+.heat-cell.future { background: transparent; color: var(--line); cursor: default; }
+.heat-cell.today { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.heat-cell:not(.future):active { transform: scale(.94); }
+
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 14px; background: var(--bg); border-radius: 12px; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span { display: block; text-align: center; padding: 9px; border-radius: 9px; font-size: 14px; color: var(--muted); cursor: pointer; transition: background .2s, color .2s; }
+.segmented input:checked + span { background: var(--lavender); color: var(--text); font-weight: 500; }
+.segmented input:focus-visible + span { outline: 2px solid var(--accent); }
 
 [hidden] { display: none !important; }
