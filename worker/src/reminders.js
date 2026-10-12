@@ -1,7 +1,7 @@
 // Нагадування (Cron щохвилини): перед справою з часом і ввечері про невиконане.
 import { localNow, plural } from "./time.js";
 import { tg } from "./telegram.js";
-import { dayText, tasksKeyboard, habitsText, habitsKeyboard, esc } from "./views.js";
+import { dayText, tasksKeyboard, habitsText, habitsKeyboard, morningText, esc } from "./views.js";
 
 async function checkUser(env, store, user, webappUrl) {
   const now = localNow(user.tz, env.DEFAULT_TZ);
@@ -25,7 +25,26 @@ async function checkUser(env, store, user, webappUrl) {
     }
   }
 
-  // 2) Ввечері: день добігає кінця, а справи «горять»; і невідмічені звички
+  // 2) Зранку: план на день і зведення звичок (одне повідомлення, в межах 3 годин від MORNING_HOUR)
+  const morning = Number(env.MORNING_HOUR || 9);
+  if (now.hour >= morning && now.hour < morning + 3 && user.last_morning_date !== now.date) {
+    await store.setLastMorning(user.id, now.date);
+    const [tasks, overdue, habits] = await Promise.all([
+      store.tasksBetween(user.id, now.date, now.date),
+      store.overdue(user.id, now.date),
+      store.habits(user.id),
+    ]);
+    const active = habits.filter((h) => h.start_date <= now.date);
+    if (tasks.some((t) => !t.done) || overdue.length || active.length) {
+      await tg(env, "sendMessage", {
+        chat_id: user.chat_id, parse_mode: "HTML",
+        text: morningText(now.date, tasks, overdue, active),
+        reply_markup: tasksKeyboard(tasks, webappUrl),
+      });
+    }
+  }
+
+  // 3) Ввечері: день добігає кінця, а справи «горять»; і невідмічені звички
   if (now.hour >= Number(env.EVENING_HOUR || 21) && user.last_evening_date !== now.date) {
     await store.setLastEvening(user.id, now.date);
     const tasks = await store.tasksBetween(user.id, now.date, now.date);

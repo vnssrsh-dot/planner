@@ -9,7 +9,7 @@ from aiogram import Bot
 from .config import Config
 from .db import Database
 from .timeutil import local_now
-from .views import day_text, habits_keyboard, habits_text, tasks_keyboard
+from .views import day_text, habits_keyboard, habits_text, morning_text, tasks_keyboard
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,19 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
             await bot.send_message(user["chat_id"], text, reply_markup=tasks_keyboard([t], None, with_tomorrow=True))
             await db.mark_reminded(t["id"])
 
-    # 2) Вечернее напоминание: день заканчивается, а задачи «горят»
+    # 2) Утром: план на день и сводка привычек (в пределах 3 часов от MORNING_HOUR)
+    if cfg.morning_hour <= now.hour < cfg.morning_hour + 3 and user["last_morning_date"] != today:
+        await db.set_last_morning(user["id"], today)
+        tasks = await db.tasks_for_day(user["id"], today)
+        overdue = await db.overdue(user["id"], today)
+        habits = [h for h in await db.habits(user["id"]) if h["start_date"] <= today]
+        if any(not t["done"] for t in tasks) or overdue or habits:
+            await bot.send_message(
+                user["chat_id"], morning_text(today, tasks, overdue, habits),
+                reply_markup=tasks_keyboard(tasks, cfg.webapp_url or None),
+            )
+
+    # 3) Вечернее напоминание: день заканчивается, а задачи «горят»
     if now.hour >= cfg.evening_hour and user["last_evening_date"] != today:
         await db.set_last_evening(user["id"], today)
         tasks = await db.tasks_for_day(user["id"], today)

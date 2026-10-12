@@ -2,7 +2,8 @@
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
-     id INTEGER PRIMARY KEY, chat_id INTEGER, first_name TEXT, tz TEXT, last_evening_date TEXT)`,
+     id INTEGER PRIMARY KEY, chat_id INTEGER, first_name TEXT, tz TEXT, last_evening_date TEXT,
+     last_morning_date TEXT)`,
   `CREATE TABLE IF NOT EXISTS tasks (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, time TEXT,
      title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, done_at TEXT,
@@ -21,6 +22,8 @@ let schemaReady = false;
 export async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
+  // база, створена до появи ранкової зведення, — додаємо колонку (якщо вже є, SQLite поверне помилку)
+  try { await db.prepare("ALTER TABLE users ADD COLUMN last_morning_date TEXT").run(); } catch {}
   schemaReady = true;
 }
 
@@ -55,6 +58,7 @@ export class Store {
   }
   getUser(id) { return this.q("SELECT * FROM users WHERE id = ?", id).first(); }
   usersWithChat() { return this.all("SELECT * FROM users WHERE chat_id IS NOT NULL"); }
+  setLastMorning(id, day) { return this.q("UPDATE users SET last_morning_date = ? WHERE id = ?", day, id).run(); }
   setLastEvening(id, day) { return this.q("UPDATE users SET last_evening_date = ? WHERE id = ?", day, id).run(); }
 
   // ---------- tasks ----------

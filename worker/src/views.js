@@ -1,5 +1,5 @@
 // Тексти та клавіатури повідомлень бота.
-import { humanDay } from "./time.js";
+import { humanDay, addDays, plural } from "./time.js";
 
 export const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -44,4 +44,58 @@ export function habitsKeyboard(habits, day, webappUrl) {
   const rows = habits.map((h) => [{ text: `✓ ${short(h.title, 30)}`, callback_data: `habit:${h.id}:${day}` }]);
   if (webappUrl) rows.push([{ text: "Відкрити звички", web_app: { url: webappUrl + "#habits" } }]);
   return { inline_keyboard: rows };
+}
+
+// ---------- ранкова зведення ----------
+
+export function habitStreak(h, day) {
+  const set = new Set(h.marks);
+  let d = set.has(day) ? day : addDays(day, -1);
+  let n = 0;
+  while (set.has(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+export function habitBest(h) {
+  let best = 0, run = 0, prev = null;
+  for (const d of [...h.marks].sort()) {
+    run = prev && addDays(prev, 1) === d ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  return best;
+}
+
+function habitLine(h, day) {
+  const quit = h.kind === "quit";
+  const streak = habitStreak(h, day);
+  const best = habitBest(h);
+  const title = `<b>${esc(h.title)}</b>${quit ? " <i>(позбуваюсь)</i>" : ""}`;
+  if (!streak) {
+    return `• ${title} — ${quit ? "сьогодні новий старт, тримайся" : "почни нову серію сьогодні"}`;
+  }
+  const days = quit
+    ? `${streak} ${plural(streak, "день", "дні", "днів")} без зривів`
+    : `${streak} ${plural(streak, "день", "дні", "днів")} поспіль`;
+  const record = streak >= best && streak > 1 ? " · новий рекорд 🔥" : best > streak ? ` · рекорд ${best}` : "";
+  return `• ${title} — ${days}${record}`;
+}
+
+export function morningText(day, tasks, overdue, habits) {
+  const open = tasks.filter((t) => !t.done);
+  const lines = [`<b>Доброго ранку! План на ${humanDay(day)}</b>`, ""];
+  if (open.length) lines.push(...open.map(taskLine));
+  else lines.push("На сьогодні справ немає — можна спокійно зайнятися собою.");
+  if (overdue.length) {
+    lines.push("", `<b>Не виконано раніше: ${overdue.length}</b>`);
+    lines.push(...overdue.slice(0, 5).map((t) => `${taskLine(t)} <i>(${t.date.slice(8)}.${t.date.slice(5, 7)})</i>`));
+  }
+  if (habits.length) {
+    lines.push("", "<b>Звички</b>", ...habits.map((h) => habitLine(h, day)));
+    const best = Math.max(...habits.map((h) => habitStreak(h, day)));
+    lines.push("", best >= 3 ? "Серії ростуть — не відпускай їх сьогодні." : "Маленький крок щодня — і звичка складеться.");
+  } else {
+    lines.push("", "Гарного дня!");
+  }
+  return lines.join("\n");
 }

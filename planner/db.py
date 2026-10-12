@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     chat_id           INTEGER,               -- куда слать напоминания
     first_name        TEXT,
     tz                TEXT,                  -- IANA, напр. Europe/Moscow
-    last_evening_date TEXT                   -- дата последнего вечернего напоминания
+    last_evening_date TEXT,                  -- дата последнего вечернего напоминания
+    last_morning_date TEXT                   -- дата последней утренней сводки
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -70,6 +71,10 @@ class Database:
         self.conn = await aiosqlite.connect(self.path)
         self.conn.row_factory = aiosqlite.Row
         await self.conn.executescript(SCHEMA)
+        try:  # база, созданная до утренней сводки
+            await self.conn.execute("ALTER TABLE users ADD COLUMN last_morning_date TEXT")
+        except aiosqlite.OperationalError:
+            pass
         await self.conn.commit()
 
     async def close(self) -> None:
@@ -101,6 +106,10 @@ class Database:
     async def all_users(self) -> list[aiosqlite.Row]:
         cur = await self.conn.execute("SELECT * FROM users WHERE chat_id IS NOT NULL")
         return list(await cur.fetchall())
+
+    async def set_last_morning(self, user_id: int, date: str) -> None:
+        await self.conn.execute("UPDATE users SET last_morning_date = ? WHERE id = ?", (date, user_id))
+        await self.conn.commit()
 
     async def set_last_evening(self, user_id: int, date: str) -> None:
         await self.conn.execute(

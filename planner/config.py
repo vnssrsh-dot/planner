@@ -12,6 +12,7 @@ class Config:
     webapp_url: str
     web_port: int
     default_tz: str
+    morning_hour: int
     evening_hour: int
     remind_before_min: int
     db_path: str
@@ -36,6 +37,7 @@ def load_config() -> Config:
         # хостинги (Railway, Render, Fly) передають порт у змінній PORT
         web_port=int(os.getenv("PORT") or os.getenv("WEB_PORT", "8080")),
         default_tz=os.getenv("DEFAULT_TZ", "Europe/Kyiv"),
+        morning_hour=int(os.getenv("MORNING_HOUR", "9")),
         evening_hour=int(os.getenv("EVENING_HOUR", "21")),
         remind_before_min=int(os.getenv("REMIND_BEFORE_MIN", "15")),
         db_path=db_path,
