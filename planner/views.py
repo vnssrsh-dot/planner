@@ -12,19 +12,19 @@ def task_line(t: dict) -> str:
 
 
 def day_text(day: str, tasks: list[dict], overdue: list[dict] | None = None) -> str:
-    lines = [f"📅 <b>План на {human_day(day)}</b>", ""]
+    lines = [f"<b>План на {human_day(day)}</b>", ""]
     open_tasks = [t for t in tasks if not t["done"]]
     done = len(tasks) - len(open_tasks)
     if open_tasks:
         lines += [task_line(t) for t in open_tasks]
     elif tasks:
-        lines.append("🎉 Всё выполнено! Отличный день.")
+        lines.append("Усе виконано.")
     else:
-        lines.append("На сегодня планов нет. Добавьте задачу в планере или командой /add.")
+        lines.append("Планів немає. Додайте завдання в планері або командою /add.")
     if done:
-        lines += ["", f"✅ Выполнено: {done} из {len(tasks)}"]
+        lines += ["", f"Виконано: {done} з {len(tasks)}"]
     if overdue:
-        lines += ["", f"⚠️ <b>Хвосты с прошлых дней: {len(overdue)}</b>"]
+        lines += ["", f"<b>Не виконано раніше: {len(overdue)}</b>"]
         lines += [task_line(t) + f" <i>({t['date'][8:]}.{t['date'][5:7]})</i>" for t in overdue[:5]]
     return "\n".join(lines)
 
@@ -37,10 +37,10 @@ def tasks_keyboard(
         if t["done"]:
             continue
         title = t["title"] if len(t["title"]) <= 28 else t["title"][:27] + "…"
-        row = [InlineKeyboardButton(text=f"✅ {title}", callback_data=f"done:{t['id']}")]
+        row = [InlineKeyboardButton(text=f"✓ {title}", callback_data=f"done:{t['id']}")]
         if with_tomorrow:
-            row.append(InlineKeyboardButton(text="➡️ Завтра", callback_data=f"tmrw:{t['id']}"))
+            row.append(InlineKeyboardButton(text="→ Завтра", callback_data=f"tmrw:{t['id']}"))
         rows.append(row)
     if webapp_url:
-        rows.append([InlineKeyboardButton(text="📅 Открыть планер", web_app=WebAppInfo(url=webapp_url))])
+        rows.append([InlineKeyboardButton(text="Відкрити планер", web_app=WebAppInfo(url=webapp_url))])
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
   <meta charset="utf-8">
+  <meta name="theme-color" content="#F5F5F3">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Планер дел</title>
+  <title>Планер справ</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -11,15 +12,15 @@
   <main class="app">
     <section class="calendar card">
       <header class="cal-head">
-        <button class="icon-btn" id="prevMonth" aria-label="Предыдущий месяц">‹</button>
+        <button class="icon-btn" id="prevMonth" aria-label="Попередній місяць">‹</button>
         <h1 id="monthTitle"></h1>
-        <button class="icon-btn" id="nextMonth" aria-label="Следующий месяц">›</button>
+        <button class="icon-btn" id="nextMonth" aria-label="Наступний місяць">›</button>
       </header>
       <div class="weekdays">
-        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Нд</span>
       </div>
       <div class="grid" id="grid"></div>
-      <button class="today-link" id="gotoToday" hidden>Вернуться к сегодня</button>
+      <button class="today-link" id="gotoToday" hidden>Повернутися до сьогодні</button>
     </section>
 
     <section class="day">
@@ -35,7 +36,7 @@
       </header>
 
       <div class="overdue card" id="overdue" hidden>
-        <div class="overdue-title">⚠️ Не сделано в прошлые дни</div>
+        <div class="overdue-title">Не виконано раніше</div>
         <ul id="overdueList" class="list"></ul>
       </div>
 
@@ -49,32 +50,32 @@
     </section>
   </main>
 
-  <button class="fab" id="addBtn" aria-label="Добавить задачу">+</button>
+  <button class="fab" id="addBtn" aria-label="Додати завдання">+</button>
 
   <div class="sheet-backdrop" id="backdrop" hidden></div>
   <form class="sheet" id="sheet" hidden autocomplete="off">
     <div class="sheet-grip"></div>
-    <h3 id="sheetTitle">Новая задача</h3>
+    <h3 id="sheetTitle">Нове завдання</h3>
     <label class="field">
-      <span>Что нужно сделать</span>
-      <input name="title" maxlength="200" required placeholder="Например, позвонить маме">
+      <span>Що потрібно зробити</span>
+      <input name="title" maxlength="200" required placeholder="Наприклад, зателефонувати мамі">
     </label>
     <div class="row">
       <label class="field"><span>Дата</span><input type="date" name="date" required></label>
-      <label class="field"><span>Время <i>(необязательно)</i></span><input type="time" name="time"></label>
+      <label class="field"><span>Час <i>(необов’язково)</i></span><input type="time" name="time"></label>
     </div>
     <label class="field">
-      <span>Заметка</span>
-      <textarea name="note" rows="2" maxlength="1000" placeholder="Детали, адрес, ссылка…"></textarea>
+      <span>Нотатка</span>
+      <textarea name="note" rows="2" maxlength="1000" placeholder="Деталі, адреса, посилання…"></textarea>
     </label>
     <div class="sheet-actions">
-      <button type="button" class="btn danger" id="deleteBtn" hidden>Удалить</button>
-      <button type="button" class="btn ghost" id="cancelBtn">Отмена</button>
-      <button type="submit" class="btn primary" id="saveBtn">Сохранить</button>
+      <button type="button" class="btn danger" id="deleteBtn" hidden>Видалити</button>
+      <button type="button" class="btn ghost" id="cancelBtn">Скасувати</button>
+      <button type="submit" class="btn primary" id="saveBtn">Зберегти</button>
     </div>
   </form>
 
-  <div class="toast" id="toast" hidden><span id="toastText"></span><button id="toastUndo">Отменить</button></div>
+  <div class="toast" id="toast" hidden><span id="toastText"></span><button id="toastUndo">Скасувати</button></div>
 
   <script src="/static/app.js"></script>
 </body>

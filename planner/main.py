@@ -29,9 +29,9 @@ async def main() -> None:
     dp.include_router(router)
 
     await bot.set_my_commands([
-        BotCommand(command="today", description="План на сегодня"),
-        BotCommand(command="add", description="Добавить задачу на сегодня"),
-        BotCommand(command="tomorrow", description="Добавить задачу на завтра"),
+        BotCommand(command="today", description="План на сьогодні"),
+        BotCommand(command="add", description="Додати завдання на сьогодні"),
+        BotCommand(command="tomorrow", description="Додати завдання на завтра"),
     ])
     if cfg.webapp_url:
         await bot.set_chat_menu_button(

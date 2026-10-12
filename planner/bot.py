@@ -1,5 +1,6 @@
 """Команды и кнопки Telegram-бота."""
 import re
+from html import escape
 from datetime import date
 
 from aiogram import F, Router
@@ -36,12 +37,12 @@ async def cmd_start(message: Message, db: Database, cfg: Config) -> None:
     u = message.from_user
     await db.upsert_user(u.id, chat_id=message.chat.id, first_name=u.first_name)
     await message.answer(
-        f"Привет, {u.first_name}! 👋\n\n"
-        "Я — планер дел. Каждый день показываю план, а вечером напомню о том, что ещё не сделано.\n\n"
-        "• Кнопка <b>📅 Открыть планер</b> — календарь, добавление и редактирование задач\n"
-        "• /today — план на сегодня\n"
-        "• /add 18:30 Позвонить маме — быстро добавить задачу на сегодня\n"
-        "• /tomorrow Купить хлеб — добавить на завтра"
+        f"Привіт, {u.first_name}!\n\n"
+        "Я — планер справ. Щодня показую план, а ввечері нагадаю про те, що ще не зроблено.\n\n"
+        "• <b>Відкрити планер</b> — календар, додавання і редагування завдань\n"
+        "• /today — план на сьогодні\n"
+        "• /add 18:30 Зателефонувати мамі — додати завдання на сьогодні\n"
+        "• /tomorrow Купити хліб — додати на завтра"
     )
     await send_day(message, db, cfg, u.id)
 
@@ -53,7 +54,7 @@ async def cmd_today(message: Message, db: Database, cfg: Config) -> None:
 
 
 def _parse_quick(text: str) -> tuple[str | None, str]:
-    """'18:30 Позвонить маме' -> ('18:30', 'Позвонить маме')."""
+    """'18:30 Зателефонувати мамі' -> ('18:30', 'Зателефонувати мамі')."""
     parts = text.strip().split(maxsplit=1)
     if parts and (m := TIME_RE.match(parts[0])):
         h, mnt = int(m[1]), int(m[2])
@@ -67,14 +68,14 @@ async def _quick_add(message: Message, command: CommandObject, db: Database, cfg
     await db.upsert_user(uid, chat_id=message.chat.id)
     time, title = _parse_quick(command.args or "")
     if not title:
-        await message.answer(f"Напишите задачу после команды, например:\n/{command.command} 18:30 Позвонить маме")
+        await message.answer(f"Напишіть завдання після команди, наприклад:\n/{command.command} 18:30 Зателефонувати мамі")
         return
     day = await _today(db, cfg, uid)
     if shift:
         day = tomorrow_of(day)
     await db.create_task(uid, date=day, time=time, title=title[:200])
-    when = f" в {time}" if time else ""
-    await message.answer(f"➕ Добавлено на {human_day(day)}{when}: <b>{title}</b>")
+    when = f" о {time}" if time else ""
+    await message.answer(f"Додано на {human_day(day)}{when}: <b>{escape(title)}</b>")
 
 
 @router.message(Command("add"))
@@ -110,7 +111,7 @@ async def _refresh(cb: CallbackQuery, db: Database, cfg: Config) -> None:
 @router.callback_query(F.data.startswith("done:"))
 async def cb_done(cb: CallbackQuery, db: Database, cfg: Config) -> None:
     task = await db.update_task(cb.from_user.id, int(cb.data.split(":")[1]), done=True)
-    await cb.answer(f"✅ {task['title']}" if task else "Задача не найдена")
+    await cb.answer(f"Виконано: {task['title']}" if task else "Завдання не знайдено")
     await _refresh(cb, db, cfg)
 
 
@@ -119,5 +120,5 @@ async def cb_tomorrow(cb: CallbackQuery, db: Database, cfg: Config) -> None:
     uid = cb.from_user.id
     tomorrow = tomorrow_of(await _today(db, cfg, uid))
     task = await db.update_task(uid, int(cb.data.split(":")[1]), date=tomorrow)
-    await cb.answer(f"➡️ Перенесено на завтра" if task else "Задача не найдена")
+    await cb.answer("Перенесено на завтра" if task else "Завдання не знайдено")
     await _refresh(cb, db, cfg)

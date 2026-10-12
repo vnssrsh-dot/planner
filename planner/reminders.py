@@ -27,7 +27,7 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
         elif now >= due - timedelta(minutes=cfg.remind_before_min):
             late = now > due
             text = (
-                f"{'🔥 Время вышло' if late else '⏰ Скоро'}: <b>{escape(t['title'])}</b> в {t['time']}"
+                f"{'Час минув' if late else 'Незабаром'}: <b>{escape(t['title'])}</b> о {t['time']}"
                 + (f"\n<i>{escape(t['note'])}</i>" if t["note"] else "")
             )
             await bot.send_message(user["chat_id"], text, reply_markup=tasks_keyboard([t], None, with_tomorrow=True))
@@ -40,10 +40,9 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
         open_tasks = [t for t in tasks if not t["done"]]
         if open_tasks:
             text = (
-                f"🔥 <b>День подходит к концу, а {len(open_tasks)} "
-                f"{_plural(len(open_tasks), 'задача', 'задачи', 'задач')} ещё не "
-                f"{'выполнена' if len(open_tasks) == 1 else 'выполнены'}!</b>\n\n"
-                "Отметьте сделанное или перенесите на завтра.\n\n"
+                f"<b>День добігає кінця, а {len(open_tasks)} "
+                f"{_plural(len(open_tasks), 'завдання', 'завдання', 'завдань')} ще не виконано.</b>\n"
+                "Позначте зроблене або перенесіть на завтра.\n\n"
                 + day_text(today, tasks)
             )
             await bot.send_message(

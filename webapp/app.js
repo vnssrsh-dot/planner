@@ -2,27 +2,27 @@
 
 const tg = window.Telegram?.WebApp;
 if (tg && tg.initData) {
-  document.documentElement.classList.add("tg");
   tg.ready();
   tg.expand();
+  try { tg.setHeaderColor("#F5F5F3"); tg.setBackgroundColor("#F5F5F3"); } catch (_) {}
 }
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
-const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+const MONTHS = ["січень", "лютий", "березень", "квітень", "травень", "червень", "липень", "серпень", "вересень", "жовтень", "листопад", "грудень"];
+const MONTHS_GEN = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
+const WEEKDAYS = ["неділя", "понеділок", "вівторок", "середа", "четвер", "пʼятниця", "субота"];
 
 const $ = (id) => document.getElementById(id);
 const state = {
-  today: null,          // "YYYY-MM-DD" в часовом поясе пользователя
+  today: null,          // "YYYY-MM-DD" у часовому поясі користувача
   selected: null,
-  view: { y: 0, m: 0 }, // отображаемый месяц
+  view: { y: 0, m: 0 }, // місяць, що відображається
   byDate: {},           // date -> [task]
   overdue: [],
-  editing: null,        // редактируемая задача или null
+  editing: null,        // завдання, що редагується, або null
 };
 
-/* ---------- даты (строки YYYY-MM-DD, считаем в UTC, чтобы не ловить DST) ---------- */
+/* ---------- дати (рядки YYYY-MM-DD, рахуємо в UTC, щоб уникнути DST) ---------- */
 const toDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
 const toStr = (dt) => dt.toISOString().slice(0, 10);
 const addDays = (s, n) => { const d = toDate(s); d.setUTCDate(d.getUTCDate() + n); return toStr(d); };
@@ -56,15 +56,15 @@ function haptic(kind) {
 function showError(e) {
   console.error(e);
   const msg = String(e.message).startsWith("401")
-    ? "Откройте планер через кнопку в боте Telegram."
-    : "Не удалось связаться с сервером. Попробуйте ещё раз.";
+    ? "Відкрийте планер через кнопку в боті Telegram."
+    : "Не вдалося звʼязатися із сервером. Спробуйте ще раз.";
   tg?.showAlert ? tg.showAlert(msg) : alert(msg);
 }
 
-/* ---------- загрузка ---------- */
+/* ---------- завантаження ---------- */
 function gridRange() {
   const first = new Date(Date.UTC(state.view.y, state.view.m, 1));
-  const shift = (first.getUTCDay() + 6) % 7; // понедельник — первый день
+  const shift = (first.getUTCDay() + 6) % 7; // понеділок — перший день
   const start = addDays(toStr(first), -shift);
   return { start, end: addDays(start, 41) };
 }
@@ -85,7 +85,7 @@ async function reload() {
   render();
 }
 
-/* ---------- отрисовка ---------- */
+/* ---------- відображення ---------- */
 function render() { renderCalendar(); renderDay(); }
 
 function renderCalendar() {
@@ -123,7 +123,7 @@ function renderCalendar() {
 function renderDay() {
   const ds = state.selected;
   const isToday = ds === state.today;
-  const rel = isToday ? "Сегодня" : ds === addDays(state.today, 1) ? "Завтра" : ds === addDays(state.today, -1) ? "Вчера" : weekday(ds);
+  const rel = isToday ? "Сьогодні" : ds === addDays(state.today, 1) ? "Завтра" : ds === addDays(state.today, -1) ? "Вчора" : weekday(ds);
   $("dayLabel").textContent = rel;
   $("dayTitle").textContent = isToday ? `${weekday(ds)}, ${human(ds)}` : human(ds);
 
@@ -131,7 +131,7 @@ function renderDay() {
   const open = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
 
-  // прогресс
+  // прогрес
   $("progress").hidden = !tasks.length;
   if (tasks.length) {
     const c = 2 * Math.PI * 15;
@@ -141,7 +141,7 @@ function renderDay() {
     $("progressText").textContent = `${done.length}/${tasks.length}`;
   }
 
-  // хвосты с прошлых дней (только на сегодня)
+  // невиконане з минулих днів (лише на сьогодні)
   const showOverdue = isToday && state.overdue.length > 0;
   $("overdue").hidden = !showOverdue;
   $("overdueList").replaceChildren(...(showOverdue ? state.overdue.map((t) => taskRow(t, { overdue: true })) : []));
@@ -149,15 +149,15 @@ function renderDay() {
   $("taskList").replaceChildren(...open.map((t) => taskRow(t, { late: isToday && t.time && t.time < nowHM() || ds < state.today })));
   $("doneList").replaceChildren(...done.map((t) => taskRow(t)));
   $("doneBlock").hidden = !done.length;
-  $("doneSummary").textContent = `Выполнено (${done.length})`;
+  $("doneSummary").textContent = `Виконано · ${done.length}`;
 
   const empty = $("empty");
   empty.hidden = open.length > 0;
   if (!open.length) {
-    empty.innerHTML = tasks.length
-      ? `<b>🎉</b>Всё выполнено!`
-      : isToday ? `<b>☀️</b>На сегодня планов нет.<br>Нажмите «+», чтобы добавить задачу.`
-      : `<b>🗓️</b>На этот день ничего не запланировано.`;
+    empty.textContent = tasks.length
+      ? `Усе виконано`
+      : isToday ? `На сьогодні планів немає`
+      : `Нічого не заплановано`;
   }
 }
 
@@ -168,7 +168,7 @@ function taskRow(t, opts = {}) {
 
   const check = document.createElement("button");
   check.className = "check";
-  check.setAttribute("aria-label", t.done ? "Вернуть в работу" : "Отметить выполненной");
+  check.setAttribute("aria-label", t.done ? "Повернути в роботу" : "Позначити виконаним");
   check.onclick = (e) => { e.stopPropagation(); toggleDone(t, li, check); };
 
   const body = document.createElement("div");
@@ -191,14 +191,14 @@ function taskRow(t, opts = {}) {
   if (opts.overdue) {
     const move = document.createElement("button");
     move.className = "move-btn";
-    move.textContent = "На сегодня";
+    move.textContent = "На сьогодні";
     move.onclick = (e) => { e.stopPropagation(); moveToToday(t); };
     li.append(move);
   }
   return li;
 }
 
-/* ---------- действия ---------- */
+/* ---------- дії ---------- */
 function selectDay(ds) {
   state.selected = ds;
   const d = toDate(ds);
@@ -224,7 +224,7 @@ async function toggleDone(t, li, check) {
   try {
     const updated = await api("PATCH", `/api/tasks/${t.id}`, { done: next });
     await reload();
-    if (next) toast(`«${updated.title}» выполнено`, async () => {
+    if (next) toast(`«${updated.title}» виконано`, async () => {
       await api("PATCH", `/api/tasks/${t.id}`, { done: false });
       await reload();
     });
@@ -255,7 +255,7 @@ const form = $("sheet");
 
 function openSheet(task) {
   state.editing = task || null;
-  $("sheetTitle").textContent = task ? "Изменить задачу" : "Новая задача";
+  $("sheetTitle").textContent = task ? "Редагувати" : "Нове завдання";
   form.elements.title.value = task?.title || "";
   form.elements.date.value = task?.date || state.selected;
   form.elements.time.value = task?.time || "";
@@ -302,8 +302,8 @@ $("deleteBtn").onclick = () => {
     try { await api("DELETE", `/api/tasks/${t.id}`); closeSheet(); await reload(); haptic("medium"); }
     catch (e) { showError(e); }
   };
-  if (tg?.showConfirm && tg.initData) tg.showConfirm(`Удалить «${t.title}»?`, doDelete);
-  else doDelete(confirm(`Удалить «${t.title}»?`));
+  if (tg?.showConfirm && tg.initData) tg.showConfirm(`Видалити «${t.title}»?`, doDelete);
+  else doDelete(confirm(`Видалити «${t.title}»?`));
 };
 
 $("cancelBtn").onclick = closeSheet;
@@ -329,6 +329,6 @@ async function init() {
   } catch (e) { showError(e); }
 }
 
-// вернулись в приложение (например, на следующий день) — обновим данные
+// повернулися в застосунок (наприклад, наступного дня) — оновимо дані
 document.addEventListener("visibilitychange", () => { if (!document.hidden) init(); });
 init();
