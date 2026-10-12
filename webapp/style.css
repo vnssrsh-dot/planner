@@ -1,13 +1,3 @@
-/* Шрифт заголовків Kyiv*Type Sans (Дмитро Растворцев). Файл кладемо в webapp/fonts/.
-   Поки файлу немає, заголовки показуються запасним Manrope. */
-@font-face {
-  font-family: "Kyiv Type Sans";
-  src: url("/static/fonts/KyivTypeSans-VarGX.woff2") format("woff2"),
-       url("/static/fonts/KyivTypeSans-VarGX.ttf") format("truetype");
-  font-weight: 100 900;
-  font-display: swap;
-}
-
 /* Палітра Neutral Minimal */
 :root {
   --bg: #F5F5F3;        /* основний фон */
@@ -25,7 +15,7 @@
   --lavender: #EBDDF3;  /* звички, особисті цілі */
   --coral: #F2DAD7;     /* термінове, мʼякі попередження */
   --radius: 12px;
-  --font-display: "Kyiv Type Sans", "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
