@@ -28,8 +28,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     note       TEXT NOT NULL DEFAULT '',
     done       INTEGER NOT NULL DEFAULT 0,
     done_at    TEXT,
-    reminded   INTEGER NOT NULL DEFAULT 0,   -- напоминание по времени уже отправлено
-    created_at TEXT NOT NULL
+    reminded   INTEGER NOT NULL DEFAULT 0,   -- «Незабаром» уже отправлено
+    created_at TEXT NOT NULL,
+    followed_up  INTEGER NOT NULL DEFAULT 0, -- «Час минув» отправлено (или не нужно)
+    scheduled_at TEXT                        -- когда делу последний раз задали дату/время (UTC ISO)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks(user_id, date);
@@ -78,6 +80,11 @@ class Database:
         for col in ("last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT"):
             try:
                 await self.conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+            except aiosqlite.OperationalError:
+                pass
+        for col in ("followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT"):
+            try:
+                await self.conn.execute(f"ALTER TABLE tasks ADD COLUMN {col}")
             except aiosqlite.OperationalError:
                 pass
         await self.conn.commit()
@@ -176,8 +183,8 @@ class Database:
         self, user_id: int, *, date: str, title: str, time: str | None = None, note: str = "",
     ) -> dict:
         cur = await self.conn.execute(
-            "INSERT INTO tasks (user_id, date, time, title, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, date, time, title, note, _now()),
+            "INSERT INTO tasks (user_id, date, time, title, note, created_at, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, date, time, title, note, _now(), _now()),
         )
         await self.conn.commit()
         return await self.get_task(user_id, cur.lastrowid)
@@ -190,7 +197,8 @@ class Database:
             allowed["done"] = int(bool(allowed["done"]))
             allowed["done_at"] = _now() if allowed["done"] else None
         if "date" in allowed or "time" in allowed:
-            allowed["reminded"] = 0  # перенесли — напомним заново
+            # перенесли — оба напоминания заново
+            allowed.update(reminded=0, followed_up=0, scheduled_at=_now())
         sets = ", ".join(f"{k} = ?" for k in allowed)
         await self.conn.execute(
             f"UPDATE tasks SET {sets} WHERE id = ? AND user_id = ?",
@@ -215,6 +223,21 @@ class Database:
             (user_id, date),
         )
         return [_task(r) for r in await cur.fetchall()]
+
+    async def timed_pending(self, user_id: int, yesterday: str, today: str) -> list[dict]:
+        cur = await self.conn.execute(
+            """
+            SELECT id, date, time, title, note, reminded, followed_up, scheduled_at FROM tasks
+            WHERE user_id = ? AND date IN (?, ?) AND time IS NOT NULL AND done = 0
+              AND (reminded = 0 OR followed_up = 0)
+            """,
+            (user_id, yesterday, today),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+    async def mark_followed_up(self, task_id: int) -> None:
+        await self.conn.execute("UPDATE tasks SET reminded = 1, followed_up = 1 WHERE id = ?", (task_id,))
+        await self.conn.commit()
 
     async def mark_reminded(self, task_id: int) -> None:
         await self.conn.execute("UPDATE tasks SET reminded = 1 WHERE id = ?", (task_id,))

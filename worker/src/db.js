@@ -8,7 +8,8 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS tasks (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, time TEXT,
      title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, done_at TEXT,
-     reminded INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`,
+     reminded INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+     followed_up INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks(user_id, date)`,
   `CREATE TABLE IF NOT EXISTS habits (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL,
@@ -26,6 +27,10 @@ export async function ensureSchema(db) {
   // база, створена до появи ранкової зведення, — додаємо колонку (якщо вже є, SQLite поверне помилку)
   for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT", "last_seen_at TEXT"]) {
     try { await db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run(); } catch {}
+  }
+  // справи: друге нагадування «Час минув» і момент, коли справі востаннє задали дату/час
+  for (const col of ["followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT"]) {
+    try { await db.prepare(`ALTER TABLE tasks ADD COLUMN ${col}`).run(); } catch {}
   }
   schemaReady = true;
 }
@@ -127,15 +132,18 @@ export class Store {
   }
   async createTask(uid, { date, title, time = null, note = "" }) {
     const res = await this.q(
-      "INSERT INTO tasks (user_id, date, time, title, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      uid, date, time, title, note, now()).run();
+      "INSERT INTO tasks (user_id, date, time, title, note, created_at, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      uid, date, time, title, note, now(), new Date().toISOString()).run();
     return this.getTask(uid, res.meta.last_row_id);
   }
   async updateTask(uid, id, fields) {
     const f = {};
     for (const k of ["date", "time", "title", "note", "done"]) if (k in fields) f[k] = fields[k];
     if ("done" in f) { f.done = f.done ? 1 : 0; f.done_at = f.done ? now() : null; }
-    if ("date" in f || "time" in f) f.reminded = 0; // перенесли — нагадаємо знову
+    if ("date" in f || "time" in f) {
+      // перенесли — обидва нагадування знову; запамʼятовуємо, коли саме
+      f.reminded = 0; f.followed_up = 0; f.scheduled_at = new Date().toISOString();
+    }
     const keys = Object.keys(f);
     if (keys.length) {
       await this.q(`UPDATE tasks SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ? AND user_id = ?`,
@@ -147,6 +155,15 @@ export class Store {
     const res = await this.q("DELETE FROM tasks WHERE id = ? AND user_id = ?", id, uid).run();
     return res.meta.changes > 0;
   }
+  // Невиконані справи з часом за вчора й сьогодні, по яких ще є що надіслати
+  timedPending(uid, yesterday, today) {
+    return this.all(
+      `SELECT id, date, time, title, note, reminded, followed_up, scheduled_at FROM tasks
+       WHERE user_id = ? AND date IN (?, ?) AND time IS NOT NULL AND done = 0 AND (reminded = 0 OR followed_up = 0)`,
+      uid, yesterday, today);
+  }
+  markFollowedUp(id) { return this.q("UPDATE tasks SET reminded = 1, followed_up = 1 WHERE id = ?", id).run(); }
+
   async timedUnreminded(uid, day) {
     const rows = await this.all(
       `SELECT * FROM tasks WHERE user_id = ? AND date = ? AND time IS NOT NULL AND done = 0 AND reminded = 0`,

@@ -1,7 +1,7 @@
 """Напоминания (проверка раз в минуту):
  • через 30 мин после знакомства — приглашение заполнить планер (если ничего не добавлено);
  • 9:00 — план дня (тем, кто пользуется планером);
- • за 15 мин до дела со временем — «Незабаром»;
+ • за 15 мин до дела со временем — «Незабаром», через 30 мин после, если не отмечено, — «Час минув»;
  • 21:00 — «Підсумки дня» одним сообщением.
 Под каждым сообщением только кнопка «Відкрити Ritmoza» — дела меняют в приложении.
 """
@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from html import escape
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramForbiddenError
 
 from .config import Config
 from .db import Database
@@ -19,6 +20,7 @@ from .views import evening_text, invite_text, morning_text, open_keyboard, remin
 
 log = logging.getLogger(__name__)
 INVITE_DELAY = timedelta(minutes=30)
+FOLLOW_UP_MIN = 30  # «Час минув» — через столько минут после времени дела
 
 
 async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
@@ -36,19 +38,37 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
     if not active:
         return  # дальше — только для тех, кто пользуется планером
 
-    # 2) За N минут до дела со временем
-    for t in await db.timed_unreminded(user["id"], today):
+    # 2) Дела со временем: за 15 мин — «Незабаром»; через 30 мин после, если не отмечено, — «Час минув».
+    #    Дело, записанное уже после своего времени, не напоминаем. Дело в 23:50 получит «Час минув» после полуночи.
+    yesterday = (now.date() - timedelta(days=1)).isoformat()
+    for t in await db.timed_pending(user["id"], yesterday, today):
         h, m = map(int, t["time"].split(":"))
-        due = now.replace(hour=h, minute=m, second=0, microsecond=0)
-        if now > due + timedelta(hours=1):
-            await db.mark_reminded(t["id"])  # давно прошло — не спамим, скажем вечером
-        elif now >= due - timedelta(minutes=cfg.remind_before_min):
-            text = (
-                f"{'Час минув' if now > due else 'Незабаром'}: <b>{escape(t['title'])}</b> о {t['time']}"
-                + (f"\n<i>{escape(t['note'])}</i>" if t["note"] else "")
-            )
+        due = datetime.fromisoformat(t["date"]).replace(hour=h, minute=m, tzinfo=now.tzinfo)
+        since = (now - due).total_seconds() / 60
+        if t["scheduled_at"] and datetime.fromisoformat(t["scheduled_at"]) >= due:
+            await db.mark_followed_up(t["id"]); continue
+        if since > 180:
+            await db.mark_followed_up(t["id"]); continue  # давно — скажет вечерняя сводка
+        if not t["followed_up"] and since >= FOLLOW_UP_MIN:
+            kind = "late"
+        elif not t["reminded"] and -cfg.remind_before_min <= since < FOLLOW_UP_MIN:
+            kind = "soon"
+        else:
+            continue
+        if kind == "soon":
+            text = f"<b>{'Вже час' if since > 0 else 'Незабаром'}:</b> {escape(t['title'])} о {t['time']}" + (
+                f"\n<i>{escape(t['note'])}</i>" if t["note"] else "")
+        else:
+            text = (f"<b>Час минув:</b> {escape(t['title'])} о {t['time']}\n"
+                    "Якщо вже зроблено — відміть ✓. Якщо ні — перенеси в Ritmoza.")
+        try:
             await bot.send_message(user["chat_id"], text, reply_markup=reminder_keyboard(t, cfg.webapp_url or None))
-            await db.mark_reminded(t["id"])
+        except TelegramForbiddenError:
+            pass  # бота заблокировали — больше не пробуем
+        except Exception:
+            log.exception("Не удалось отправить напоминание %s, повторим через минуту", t["id"])
+            continue
+        await (db.mark_reminded(t["id"]) if kind == "soon" else db.mark_followed_up(t["id"]))
 
     # 3) Утром — план дня, хвосты и серии привычек (в пределах 3 часов от MORNING_HOUR, раз в день)
     if cfg.morning_hour <= now.hour < cfg.morning_hour + 3 and user["last_morning_date"] != today:

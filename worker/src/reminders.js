@@ -1,7 +1,7 @@
 // Нагадування (Cron щохвилини):
 //  • через 30 хв після знайомства — запрошення заповнити планер (якщо людина нічого не додала);
 //  • 9:00 — план дня (тим, хто користується планером);
-//  • за 15 хв до справи з часом — «Незабаром»;
+//  • за 15 хв до справи з часом — «Незабаром», через 30 хв після, якщо не відмічено, — «Час минув»;
 //  • 21:00 — «Підсумки дня» одним повідомленням.
 // Під кожним повідомленням лише кнопка «Відкрити Ritmoza» — справи змінюють у застосунку.
 import { localNow, addDays } from "./time.js";
@@ -9,6 +9,7 @@ import { tg } from "./telegram.js";
 import { morningText, inviteText, eveningText, openKeyboard, reminderKeyboard, esc } from "./views.js";
 
 const INVITE_DELAY_MS = 30 * 60 * 1000;
+const FOLLOW_UP_MIN = 30; // «Час минув» — через стільки хвилин після часу справи
 
 async function send(env, chatId, text, webappUrl, hash) {
   await tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text, reply_markup: openKeyboard(webappUrl, hash) });
@@ -26,28 +27,39 @@ async function checkUser(env, store, user, webappUrl) {
   }
   if (!active) return; // далі — лише для тих, хто користується планером
 
-  // 2) За N хвилин до справи з часом — про кожну справу окремо
-  for (const t of await store.timedUnreminded(user.id, now.date)) {
+  // 2) Справи з часом — два кроки:
+  //    • за 15 хв до часу — «Незабаром»;
+  //    • через 30 хв після часу, якщо справу не відмічено, — «Час минув».
+  //    Справу, записану вже після її часу, не нагадуємо. Задача о 23:50 отримає «Час минув» після півночі.
+  const yesterday = addDays(now.date, -1);
+  for (const t of await store.timedPending(user.id, yesterday, now.date)) {
     const [h, m] = t.time.split(":").map(Number);
-    const due = h * 60 + m;
-    if (now.minutes > due + 60) {
-      await store.markReminded(t.id); // давно минуло — не спамимо, скажемо ввечері
-    } else if (now.minutes >= due - before) {
-      const late = now.minutes > due;
-      const res = await tg(env, "sendMessage", {
-        chat_id: user.chat_id, parse_mode: "HTML",
-        text: `${late ? "Час минув" : "Незабаром"}: <b>${esc(t.title)}</b> о ${t.time}` + (t.note ? `\n<i>${esc(t.note)}</i>` : ""),
-        reply_markup: reminderKeyboard(t, webappUrl),
-      });
-      const at = `${now.tz} ${now.date} ${Math.floor(now.minutes / 60)}:${String(now.minutes % 60).padStart(2, "0")}`;
-      // Відмічаємо «надіслано» лише коли Telegram підтвердив. Збій мережі чи перевантаження —
-      // спробуємо ще раз наступної хвилини. Якщо людина заблокувала бота (403) — більше не пробуємо.
-      if (res.ok || res.error_code === 403 || res.error_code === 400) {
-        await store.markReminded(t.id);
-        console.log(`reminder ${res.ok ? "sent" : "dropped " + res.error_code}: user ${user.id}, task ${t.id} at ${t.time} (${at})`);
-      } else {
-        console.log(`reminder FAILED, will retry: user ${user.id}, task ${t.id} at ${t.time} (${at}):`, JSON.stringify(res).slice(0, 200));
-      }
+    const due = (t.date === now.date ? 0 : -1440) + h * 60 + m; // хвилини від початку сьогоднішньої доби
+    const sinceDue = now.minutes - due;                          // >0 — час уже минув
+    const dueMs = Date.now() - sinceDue * 60000;
+
+    if (t.scheduled_at && Date.parse(t.scheduled_at) >= dueMs) { await store.markFollowedUp(t.id); continue; }
+    if (sinceDue > 180) { await store.markFollowedUp(t.id); continue; } // давно — скаже вечірня зведення
+
+    let kind = null;
+    if (!t.followed_up && sinceDue >= FOLLOW_UP_MIN) kind = "late";
+    else if (!t.reminded && sinceDue >= -before && sinceDue < FOLLOW_UP_MIN) kind = "soon";
+    if (!kind) continue;
+
+    const text = kind === "soon"
+      ? `<b>${sinceDue > 0 ? "Вже час" : "Незабаром"}:</b> ${esc(t.title)} о ${t.time}` + (t.note ? `\n<i>${esc(t.note)}</i>` : "")
+      : `<b>Час минув:</b> ${esc(t.title)} о ${t.time}\nЯкщо вже зроблено — відміть ✓. Якщо ні — перенеси в Ritmoza.`;
+    const res = await tg(env, "sendMessage", {
+      chat_id: user.chat_id, parse_mode: "HTML", text, reply_markup: reminderKeyboard(t, webappUrl),
+    });
+    const at = `${now.tz} ${now.date} ${Math.floor(now.minutes / 60)}:${String(now.minutes % 60).padStart(2, "0")}`;
+    // «надіслано» — лише після підтвердження Telegram; збій мережі — повторимо наступної хвилини;
+    // людина заблокувала бота (403) чи помилка запиту (400) — більше не пробуємо
+    if (res.ok || res.error_code === 403 || res.error_code === 400) {
+      await (kind === "soon" ? store.markReminded(t.id) : store.markFollowedUp(t.id));
+      console.log(`reminder ${kind} ${res.ok ? "sent" : "dropped " + res.error_code}: user ${user.id}, task ${t.id} ${t.date} ${t.time} (${at})`);
+    } else {
+      console.log(`reminder ${kind} FAILED, will retry: user ${user.id}, task ${t.id} (${at}):`, JSON.stringify(res).slice(0, 200));
     }
   }
 
