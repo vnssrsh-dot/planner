@@ -1,23 +1,38 @@
 // Дати як рядки YYYY-MM-DD у часовому поясі користувача.
 
+// Intl.DateTimeFormat дорогий у створенні, а Cron на безкоштовному плані має ліміт ~10 мс CPU.
+// Тому форматери створюємо один раз на часовий пояс і перевикористовуємо.
+const formatters = new Map();
+function formatterFor(zone) {
+  let f = formatters.get(zone);
+  if (f === undefined) {
+    try {
+      f = new Intl.DateTimeFormat("en-CA", {
+        timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      });
+    } catch {
+      f = null; // невідомий часовий пояс
+    }
+    formatters.set(zone, f);
+  }
+  return f;
+}
+
 export function validZone(tz) {
-  if (!tz) return false;
-  try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch { return false; }
+  return !!tz && !!formatterFor(tz);
 }
 
 export function localNow(tz, fallback) {
   const zone = validZone(tz) ? tz : validZone(fallback) ? fallback : "UTC";
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-    }).formatToParts(new Date()).map((p) => [p.type, p.value]),
-  );
+  const parts = {};
+  for (const p of formatterFor(zone).formatToParts(new Date())) parts[p.type] = p.value;
+  const hour = Number(parts.hour) % 24;
   return {
     tz: zone,
     date: `${parts.year}-${parts.month}-${parts.day}`,
-    hour: Number(parts.hour),
-    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+    hour,
+    minutes: hour * 60 + Number(parts.minute),
   };
 }
 

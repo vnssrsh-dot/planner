@@ -4,6 +4,7 @@ import { tg } from "./telegram.js";
 import { dayText, tasksKeyboard, habitsText, habitsKeyboard, openKeyboard, ownerStatsText, esc } from "./views.js";
 
 const OWNER_COMMAND = "rtmz_pulse";
+const OWNER_CHECK_COMMAND = "rtmz_check";
 
 async function today(store, env, uid) {
   const user = await store.getUser(uid);
@@ -45,6 +46,29 @@ async function onMessage(env, store, msg, webappUrl) {
       });
     } else if (String(u.id) === String(env.ADMIN_ID).trim()) {
       await tg(env, "sendMessage", { chat_id: msg.chat.id, parse_mode: "HTML", text: ownerStatsText(await store.ownerStats()) });
+    }
+    return;
+  }
+
+  // Діагностика нагадувань для власника: час бота, часовий пояс і власні справи на сьогодні
+  if (cmd === OWNER_CHECK_COMMAND) {
+    if (env.ADMIN_ID && String(u.id) === String(env.ADMIN_ID).trim()) {
+      const user = await store.getUser(u.id);
+      const now = localNow(user?.tz, env.DEFAULT_TZ);
+      const rows = await store.all(
+        "SELECT title, time, done, reminded FROM tasks WHERE user_id = ? AND date = ? ORDER BY time IS NULL, time", u.id, now.date);
+      const hm = `${String(now.hour).padStart(2, "0")}:${String(now.minutes % 60).padStart(2, "0")}`;
+      const lines = [
+        "<b>Ritmoza · перевірка нагадувань</b>",
+        `Час бота для вас: <b>${hm}</b>, ${now.date}`,
+        `Часовий пояс: <code>${esc(user?.tz || "не відомий — відкрийте застосунок")}</code>`,
+        "",
+        ...(rows.length ? rows.map((t) => `${t.done ? "✅" : t.time ? (t.reminded ? "🔔" : "⏳") : "·"} ${t.time || "без часу"} — ${esc(t.title)}`)
+          : ["На сьогодні справ немає."]),
+        "",
+        "<i>🔔 нагадування надіслано · ⏳ чекає (прийде за 15 хв) · ✅ виконано</i>",
+      ];
+      await tg(env, "sendMessage", { chat_id: msg.chat.id, parse_mode: "HTML", text: lines.join("\n") });
     }
     return;
   }

@@ -16,6 +16,10 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "ritmoza"
 
+# Журнал запусків і помилок (Cloudflare → Observability)
+[observability]
+enabled = true
+
 # Перевірка нагадувань щохвилини
 [triggers]
 crons = ["* * * * *"]

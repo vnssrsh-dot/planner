@@ -26,7 +26,7 @@ async function checkUser(env, store, user, webappUrl) {
   }
   if (!active) return; // далі — лише для тих, хто користується планером
 
-  // 2) За N хвилин до справи з часом
+  // 2) За N хвилин до справи з часом — про кожну справу окремо
   for (const t of await store.timedUnreminded(user.id, now.date)) {
     const [h, m] = t.time.split(":").map(Number);
     const due = h * 60 + m;
@@ -40,6 +40,7 @@ async function checkUser(env, store, user, webappUrl) {
         reply_markup: reminderKeyboard(t, webappUrl),
       });
       await store.markReminded(t.id);
+      console.log(`reminder sent: user ${user.id}, task ${t.id} at ${t.time} (${now.tz} ${now.date} ${Math.floor(now.minutes / 60)}:${String(now.minutes % 60).padStart(2, "0")})`);
     }
   }
 
@@ -70,7 +71,8 @@ async function checkUser(env, store, user, webappUrl) {
 }
 
 export async function runReminders(env, store, webappUrl) {
-  for (const user of await store.usersWithChat()) {
+  const users = await store.usersWithChat();
+  for (const user of users) {
     try { await checkUser(env, store, user, webappUrl); }
     catch (e) { console.log("reminder error for", user.id, e?.stack || e); }
   }
