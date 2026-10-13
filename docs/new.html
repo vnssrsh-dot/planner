@@ -42,6 +42,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+/* швидкі тапи: без затримки й без збільшення екрана від подвійного дотику (iPhone і Android) */
+button, .cell, .heat-cell, .chip, .tab, .task, summary { touch-action: manipulation; }
 
 .app { max-width: 560px; margin: 0 auto; padding: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -645,29 +647,99 @@ function gridRange() {
   return { start, end: addDays(start, 41) };
 }
 
-async function loadMonth() {
+/* ---------- синхронізація з сервером ----------
+   Екран — головний: зміна одразу показується, а запити йдуть на сервер СТРОГО по черзі.
+   Дані з сервера підтягуємо лише коли черга порожня — інакше старша відповідь
+   перезаписала б свіжі натискання (саме так «стрибали» відмітки при швидкому тапі). */
+// Черги окремі для кожного «ключа» (день звички, справа): різні дні йдуть паралельно,
+// а натискання по тому самому дню — строго по порядку, тож перемагає останнє.
+const writeChains = new Map();
+let pendingWrites = 0;
+let syncTimer = null;
+
+function write(key, fn) {
+  pendingWrites++;
+  const prev = writeChains.get(key) || Promise.resolve();
+  const p = prev.then(fn).finally(() => {
+    pendingWrites--;
+    if (writeChains.get(key) === settled) writeChains.delete(key);
+    if (!pendingWrites) syncSoon();
+  });
+  const settled = p.catch(() => {});
+  writeChains.set(key, settled);
+  return p;
+}
+
+// Невдала зміна: показуємо помилку і повертаємо екран до того, що насправді на сервері
+function writeFailed(e) {
+  showError(e);
+  syncSoon(0);
+}
+
+function syncSoon(delay = 400) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => reload().catch(showError), delay);
+}
+
+let monthSeq = 0;
+async function loadMonth({ force = false } = {}) {
+  const seq = ++monthSeq;
   const { start, end } = gridRange();
   const tasks = await api("GET", `/api/tasks?from=${start}&to=${end}`);
+  // застаріла відповідь (місяць уже перегорнули) або йдуть зміни — не перезаписуємо екран
+  if (seq !== monthSeq || (!force && pendingWrites)) return false;
   state.byDate = {};
   for (const t of tasks) (state.byDate[t.date] ||= []).push(t);
+  return true;
 }
 
-async function loadToday() {
-  const [tasks, overdue] = await Promise.all([
+let reloadSeq = 0;
+async function reload() {
+  const seq = ++reloadSeq;
+  const [, today, overdue, habits] = await Promise.all([
+    loadMonth(),
     api("GET", `/api/tasks?from=${state.today}&to=${state.today}`),
     api("GET", `/api/overdue?today=${state.today}`),
+    api("GET", "/api/habits"),
   ]);
-  state.todayTasks = tasks;
+  if (seq !== reloadSeq) return;            // є новіше оновлення
+  if (pendingWrites) return;                // підтягнемо, коли черга змін спорожніє
+  state.todayTasks = today;
   state.overdue = overdue;
-}
-
-async function loadHabits() {
-  state.habits = await api("GET", "/api/habits");
-}
-
-async function reload() {
-  await Promise.all([loadMonth(), loadToday(), loadHabits()]);
+  state.habits = habits;
   render();
+}
+
+// Локально змінити справу всюди, де вона показана (сьогодні, календар, хвости)
+function patchLocalTask(id, fields) {
+  const lists = [state.todayTasks, state.overdue, ...Object.values(state.byDate)];
+  let task = null;
+  for (const list of lists) for (const t of list) if (t.id === id) { Object.assign(t, fields); task ||= t; }
+  if (!task) return;
+  // перенесення на іншу дату — переставляємо між списками
+  state.overdue = state.overdue.filter((t) => !t.done && t.date < state.today);
+  state.todayTasks = state.todayTasks.filter((t) => t.date === state.today);
+  for (const d of Object.keys(state.byDate)) state.byDate[d] = state.byDate[d].filter((t) => t.date === d);
+  const copy = { ...task };
+  if (copy.date === state.today && !state.todayTasks.some((t) => t.id === id)) state.todayTasks.push(copy);
+  if (state.byDate[copy.date] !== undefined || gridHas(copy.date)) {
+    const list = (state.byDate[copy.date] ||= []);
+    if (!list.some((t) => t.id === id)) list.push({ ...copy });
+  }
+  const byTime = (a, b) => (a.time === null) - (b.time === null) || (a.time || "").localeCompare(b.time || "") || a.id - b.id;
+  state.todayTasks.sort(byTime);
+  for (const d of Object.keys(state.byDate)) state.byDate[d].sort(byTime);
+}
+
+function gridHas(ds) {
+  const { start, end } = gridRange();
+  return ds >= start && ds <= end;
+}
+
+let renderTimer = null;
+function renderSoon(delay) {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, delay);
 }
 
 /* ---------- відображення ---------- */
@@ -1006,7 +1078,8 @@ function selectDay(ds) {
   const d = toDate(ds);
   if (d.getUTCMonth() !== state.view.m || d.getUTCFullYear() !== state.view.y) {
     state.view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
-    loadMonth().then(render).catch(showError);
+    render();
+    loadMonth({ force: true }).then((ok) => ok && render()).catch(showError);
   } else {
     render();
   }
@@ -1016,35 +1089,38 @@ function selectDay(ds) {
 function shiftMonth(n) {
   const d = new Date(Date.UTC(state.view.y, state.view.m + n, 1));
   state.view = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
-  loadMonth().then(renderCalendar).catch(showError);
+  state.byDate = {};
+  renderCalendar();
+  loadMonth({ force: true }).then((ok) => ok && (renderCalendar(), renderCalendarDay())).catch(showError);
 }
 
-async function toggleDone(t, li, check) {
+function toggleDone(t, li, check) {
+  if (li.dataset.busy) return;              // подвійний тап по тій самій справі
+  li.dataset.busy = "1";
   const next = !t.done;
   haptic(next ? "success" : "light");
+  patchLocalTask(t.id, { done: next, done_at: next ? new Date().toISOString() : null });
   if (next) {
-    // спершу чекбокс плавно заповнюється, потім рядок відʼїжджає
+    // спершу чекбокс заповнюється, потім рядок відʼїжджає; перемальовуємо після анімації
     check.classList.add("on");
-    await new Promise((r) => setTimeout(r, 280));
-    li.classList.add("leaving");
-    await new Promise((r) => setTimeout(r, 240));
+    setTimeout(() => li.classList.add("leaving"), 280);
+    renderSoon(520);
+  } else {
+    render();
   }
-  try {
-    const updated = await api("PATCH", `/api/tasks/${t.id}`, { done: next });
-    await reload();
-    if (next) toast(`«${updated.title}» виконано`, async () => {
-      await api("PATCH", `/api/tasks/${t.id}`, { done: false });
-      await reload();
-    });
-  } catch (e) { showError(e); render(); }
+  write(`task:${t.id}`, () => api("PATCH", `/api/tasks/${t.id}`, { done: next })).catch(writeFailed);
+  if (next) toast(`«${t.title}» виконано`, () => {
+    patchLocalTask(t.id, { done: false, done_at: null });
+    render();
+    write(`task:${t.id}`, () => api("PATCH", `/api/tasks/${t.id}`, { done: false })).catch(writeFailed);
+  });
 }
 
-async function moveToToday(t) {
+function moveToToday(t) {
   haptic("light");
-  try {
-    await api("PATCH", `/api/tasks/${t.id}`, { date: state.today });
-    await reload();
-  } catch (e) { showError(e); }
+  patchLocalTask(t.id, { date: state.today });
+  render();
+  write(`task:${t.id}`, () => api("PATCH", `/api/tasks/${t.id}`, { date: state.today })).catch(writeFailed);
 }
 
 let toastTimer;
@@ -1097,8 +1173,10 @@ form.onsubmit = async (e) => {
   if (!data.title || !data.date) return;
   $("saveBtn").disabled = true;
   try {
-    if (state.editing) await api("PATCH", `/api/tasks/${state.editing.id}`, data);
-    else await api("POST", "/api/tasks", data);
+    const editing = state.editing;
+    await write(editing ? `task:${editing.id}` : `new-task:${Date.now()}`, () => editing
+      ? api("PATCH", `/api/tasks/${editing.id}`, data)
+      : api("POST", "/api/tasks", data));
     haptic("success");
     closeSheet();
     if (state.page === "calendar" && data.date !== state.selected) selectDay(data.date);
@@ -1228,22 +1306,18 @@ function renderHeat(h) {
   $("heatGrid").replaceChildren(...cells);
 }
 
-async function toggleHabitDay(h, ds) {
+function toggleHabitDay(h, ds) {
   const on = !h.marks.includes(ds);
   haptic(on ? "success" : "light");
-  // одразу показуємо результат, сервер підтверджує у фоні
-  h.marks = on ? [...h.marks, ds] : h.marks.filter((d) => d !== ds);
+  // екран змінюється одразу; відповіді сервера НЕ перезаписують відмітки — лише остаточна синхронізація
+  h.marks = on ? [...h.marks, ds].sort() : h.marks.filter((d) => d !== ds);
   if (on && ds < h.start_date) h.start_date = ds;
   renderHabits();
   if (on && ds === state.today) {
     const t = $("habitToggle");
     t.classList.remove("pop"); void t.offsetWidth; t.classList.add("pop");
   }
-  try {
-    const fresh = await api(on ? "PUT" : "DELETE", `/api/habits/${h.id}/marks/${ds}`);
-    Object.assign(h, fresh);
-    renderHabits();
-  } catch (e) { showError(e); await loadHabits(); renderHabits(); }
+  write(`habit:${h.id}:${ds}`, () => api(on ? "PUT" : "DELETE", `/api/habits/${h.id}/marks/${ds}`)).catch(writeFailed);
 }
 
 /* форма звички */
@@ -1282,14 +1356,14 @@ hform.onsubmit = async (e) => {
   if (!data.title) return;
   $("habitSaveBtn").disabled = true;
   try {
-    const saved = state.editingHabit
-      ? await api("PATCH", `/api/habits/${state.editingHabit.id}`, data)
-      : await api("POST", "/api/habits", data);
+    const editing = state.editingHabit;
+    const saved = await write(editing ? `habit:${editing.id}` : `new-habit:${Date.now()}`, () => editing
+      ? api("PATCH", `/api/habits/${editing.id}`, data)
+      : api("POST", "/api/habits", data));
     state.habitSel = saved.id;
     haptic("success");
     closeSheet();
-    await loadHabits();
-    renderHabits();
+    await reload();
   } catch (err) { showError(err); }
   finally { $("habitSaveBtn").disabled = false; }
 };
@@ -1299,10 +1373,10 @@ $("habitDeleteBtn").onclick = async () => {
   const btn = $("habitDeleteBtn");
   if (!btn.dataset.armed) { btn.dataset.armed = "1"; btn.textContent = "Точно?"; return; }
   try {
-    await api("DELETE", `/api/habits/${state.editingHabit.id}`);
+    const id = state.editingHabit.id;
+    await write(`habit:${id}`, () => api("DELETE", `/api/habits/${id}`));
     closeSheet();
-    await loadHabits();
-    renderHabits();
+    await reload();
   } catch (e) { showError(e); }
 };
 $("habitCancelBtn").onclick = closeSheet;
