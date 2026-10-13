@@ -2,12 +2,17 @@
 
 export async function tg(env, method, payload = {}) {
   const base = env.TELEGRAM_API || "https://api.telegram.org";
-  const res = await fetch(`${base}/bot${env.BOT_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
+  let data;
+  try {
+    const res = await fetch(`${base}/bot${env.BOT_TOKEN}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    data = await res.json().catch(() => ({ ok: false, error_code: res.status }));
+  } catch (e) {
+    data = { ok: false, description: String(e) }; // мережа недоступна — повторимо пізніше
+  }
   if (!data.ok) console.log(`Telegram ${method} failed:`, JSON.stringify(data).slice(0, 300));
   return data;
 }

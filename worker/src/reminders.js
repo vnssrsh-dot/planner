@@ -34,13 +34,20 @@ async function checkUser(env, store, user, webappUrl) {
       await store.markReminded(t.id); // давно минуло — не спамимо, скажемо ввечері
     } else if (now.minutes >= due - before) {
       const late = now.minutes > due;
-      await tg(env, "sendMessage", {
+      const res = await tg(env, "sendMessage", {
         chat_id: user.chat_id, parse_mode: "HTML",
         text: `${late ? "Час минув" : "Незабаром"}: <b>${esc(t.title)}</b> о ${t.time}` + (t.note ? `\n<i>${esc(t.note)}</i>` : ""),
         reply_markup: reminderKeyboard(t, webappUrl),
       });
-      await store.markReminded(t.id);
-      console.log(`reminder sent: user ${user.id}, task ${t.id} at ${t.time} (${now.tz} ${now.date} ${Math.floor(now.minutes / 60)}:${String(now.minutes % 60).padStart(2, "0")})`);
+      const at = `${now.tz} ${now.date} ${Math.floor(now.minutes / 60)}:${String(now.minutes % 60).padStart(2, "0")}`;
+      // Відмічаємо «надіслано» лише коли Telegram підтвердив. Збій мережі чи перевантаження —
+      // спробуємо ще раз наступної хвилини. Якщо людина заблокувала бота (403) — більше не пробуємо.
+      if (res.ok || res.error_code === 403 || res.error_code === 400) {
+        await store.markReminded(t.id);
+        console.log(`reminder ${res.ok ? "sent" : "dropped " + res.error_code}: user ${user.id}, task ${t.id} at ${t.time} (${at})`);
+      } else {
+        console.log(`reminder FAILED, will retry: user ${user.id}, task ${t.id} at ${t.time} (${at}):`, JSON.stringify(res).slice(0, 200));
+      }
     }
   }
 
