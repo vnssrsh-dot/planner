@@ -166,6 +166,22 @@
       <label class="field"><span>Дата</span><input type="date" name="date" required></label>
       <label class="field"><span>Час <i>(необов’язково)</i></span><input type="time" name="time"></label>
     </div>
+    <label class="field" id="remindField" hidden>
+      <span>Нагадати за</span>
+      <select name="remind">
+        <option value="15">15 хвилин</option>
+        <option value="20">20 хвилин</option>
+        <option value="30">30 хвилин</option>
+        <option value="40">40 хвилин</option>
+        <option value="50">50 хвилин</option>
+        <option value="60">1 годину</option>
+        <option value="180">3 години</option>
+        <option value="300">5 годин</option>
+        <option value="480">8 годин</option>
+        <option value="720">12 годин</option>
+        <option value="1440">1 день</option>
+      </select>
+    </label>
     <label class="field">
       <span>Нотатка</span>
       <textarea name="note" rows="2" maxlength="1000" placeholder="Деталі, адреса, посилання…"></textarea>

@@ -41,7 +41,9 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
     # 2) Дела со временем: за 15 мин — «Незабаром»; через 30 мин после, если не отмечено, — «Час минув».
     #    Дело, записанное уже после своего времени, не напоминаем. Дело в 23:50 получит «Час минув» после полуночи.
     yesterday = (now.date() - timedelta(days=1)).isoformat()
-    for t in await db.timed_pending(user["id"], yesterday, today):
+    tomorrow = (now.date() + timedelta(days=1)).isoformat()
+    for t in await db.timed_pending(user["id"], yesterday, tomorrow):
+        remind = t["remind_before"] if t["remind_before"] is not None else cfg.remind_before_min
         h, m = map(int, t["time"].split(":"))
         due = datetime.fromisoformat(t["date"]).replace(hour=h, minute=m, tzinfo=now.tzinfo)
         since = (now - due).total_seconds() / 60
@@ -51,12 +53,18 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
             await db.mark_followed_up(t["id"]); continue  # давно — скажет вечерняя сводка
         if not t["followed_up"] and since >= FOLLOW_UP_MIN:
             kind = "late"
-        elif not t["reminded"] and -cfg.remind_before_min <= since < FOLLOW_UP_MIN:
+        elif not t["reminded"] and -remind <= since < FOLLOW_UP_MIN:
             kind = "soon"
         else:
             continue
         if kind == "soon":
-            text = f"<b>{'Вже час' if since > 0 else 'Незабаром'}:</b> {escape(t['title'])} о {t['time']}" + (
+            label = "Вже час" if since > 0 else ("Нагадування" if remind > 60 else "Незабаром")
+            when = ("завтра " if t["date"] == tomorrow else "") + f"о {t['time']}"
+            left = ""
+            if since < 0 and remind > 60:
+                hh, mm = divmod(int(round(-since)), 60)
+                left = " <i>(через " + " ".join(x for x in (f"{hh} год" if hh else "", f"{mm} хв" if mm else "") if x) + ")</i>"
+            text = f"<b>{label}:</b> {escape(t['title'])} {when}{left}" + (
                 f"\n<i>{escape(t['note'])}</i>" if t["note"] else "")
         else:
             text = (f"<b>Час минув:</b> {escape(t['title'])} о {t['time']}\n"

@@ -234,9 +234,16 @@ button, .cell, .heat-cell, .chip, .tab, .task, summary { touch-action: manipulat
 .field { display: block; margin-bottom: 14px; flex: 1; min-width: 0; }
 .field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .field i { font-style: normal; color: var(--inactive); }
-.field input, .field textarea {
+.field input, .field textarea, .field select {
   width: 100%; font: inherit; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; outline: none; resize: none;
+}
+/* випадаючий список «Нагадати за»: як поле, зі стрілочкою */
+.field select {
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px; background-repeat: no-repeat;
+  padding-right: 40px;
 }
 /* iPhone збільшує екран, якщо шрифт у полі менший за 16px — тримаємо рівно 16px */
 input, textarea, select { font-size: 16px !important; }
@@ -494,6 +501,22 @@ input, textarea, select { font-size: 16px !important; }
       <label class="field"><span>Дата</span><input type="date" name="date" required></label>
       <label class="field"><span>Час <i>(необов’язково)</i></span><input type="time" name="time"></label>
     </div>
+    <label class="field" id="remindField" hidden>
+      <span>Нагадати за</span>
+      <select name="remind">
+        <option value="15">15 хвилин</option>
+        <option value="20">20 хвилин</option>
+        <option value="30">30 хвилин</option>
+        <option value="40">40 хвилин</option>
+        <option value="50">50 хвилин</option>
+        <option value="60">1 годину</option>
+        <option value="180">3 години</option>
+        <option value="300">5 годин</option>
+        <option value="480">8 годин</option>
+        <option value="720">12 годин</option>
+        <option value="1440">1 день</option>
+      </select>
+    </label>
     <label class="field">
       <span>Нотатка</span>
       <textarea name="note" rows="2" maxlength="1000" placeholder="Деталі, адреса, посилання…"></textarea>
@@ -551,6 +574,7 @@ const state = {
   todayTasks: [],
   name: "",
   page: "today",
+  remindDefault: 15,    // останній вибір «Нагадати за» (з сервера)
   habits: [],           // [{id, title, kind, start_date, marks: [date]}]
   habitSel: null,       // id вибраної звички
   editingHabit: null,
@@ -1146,6 +1170,8 @@ function openSheet(task) {
   form.elements.date.value = task?.date || (state.page === "calendar" ? state.selected : state.today);
   form.elements.time.value = task?.time || "";
   form.elements.note.value = task?.note || "";
+  form.elements.remind.value = String(task?.remind_before ?? state.remindDefault);
+  syncRemindField();
   $("deleteBtn").hidden = !task;
   delete $("deleteBtn").dataset.armed;
   $("deleteBtn").textContent = "Видалити";
@@ -1164,6 +1190,11 @@ function closeSheet() {
   state.editing = null;
 }
 
+// Рядок «Нагадати за» показуємо лише коли вказано час
+function syncRemindField() { $("remindField").hidden = !form.elements.time.value; }
+form.elements.time.addEventListener("input", syncRemindField);
+form.elements.time.addEventListener("change", syncRemindField);
+
 form.onsubmit = async (e) => {
   e.preventDefault();
   const data = {
@@ -1172,6 +1203,8 @@ form.onsubmit = async (e) => {
     time: form.elements.time.value || null,
     note: form.elements.note.value.trim(),
   };
+  // «Нагадати за» має сенс лише для справи з часом
+  if (data.time) data.remind_before = Number(form.elements.remind.value);
   if (!data.title || !data.date) return;
   $("saveBtn").disabled = true;
   try {
@@ -1179,6 +1212,7 @@ form.onsubmit = async (e) => {
     await write(editing ? `task:${editing.id}` : `new-task:${Date.now()}`, () => editing
       ? api("PATCH", `/api/tasks/${editing.id}`, data)
       : api("POST", "/api/tasks", data));
+    if (data.remind_before) state.remindDefault = data.remind_before;
     haptic("success");
     closeSheet();
     if (state.page === "calendar" && data.date !== state.selected) selectDay(data.date);
@@ -1418,6 +1452,7 @@ async function init() {
     const dayChanged = state.today && state.today !== me.today;
     state.today = me.today;
     state.name = tg?.initDataUnsafe?.user?.first_name || me.first_name || "";
+    if (me.remind_before) state.remindDefault = me.remind_before;
     if (!state.selected || dayChanged) {
       state.selected = me.today;
       const d = toDate(me.today);

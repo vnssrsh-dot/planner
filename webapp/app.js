@@ -22,6 +22,7 @@ const state = {
   todayTasks: [],
   name: "",
   page: "today",
+  remindDefault: 15,    // останній вибір «Нагадати за» (з сервера)
   habits: [],           // [{id, title, kind, start_date, marks: [date]}]
   habitSel: null,       // id вибраної звички
   editingHabit: null,
@@ -573,6 +574,8 @@ function openSheet(task) {
   form.elements.date.value = task?.date || (state.page === "calendar" ? state.selected : state.today);
   form.elements.time.value = task?.time || "";
   form.elements.note.value = task?.note || "";
+  form.elements.remind.value = String(task?.remind_before ?? state.remindDefault);
+  syncRemindField();
   $("deleteBtn").hidden = !task;
   $("backdrop").hidden = false;
   form.hidden = false;
@@ -589,6 +592,11 @@ function closeSheet() {
   state.editing = null;
 }
 
+// Рядок «Нагадати за» показуємо лише коли вказано час
+function syncRemindField() { $("remindField").hidden = !form.elements.time.value; }
+form.elements.time.addEventListener("input", syncRemindField);
+form.elements.time.addEventListener("change", syncRemindField);
+
 form.onsubmit = async (e) => {
   e.preventDefault();
   const data = {
@@ -597,6 +605,8 @@ form.onsubmit = async (e) => {
     time: form.elements.time.value || null,
     note: form.elements.note.value.trim(),
   };
+  // «Нагадати за» має сенс лише для справи з часом
+  if (data.time) data.remind_before = Number(form.elements.remind.value);
   if (!data.title || !data.date) return;
   $("saveBtn").disabled = true;
   try {
@@ -604,6 +614,7 @@ form.onsubmit = async (e) => {
     await write(editing ? `task:${editing.id}` : `new-task:${Date.now()}`, () => editing
       ? api("PATCH", `/api/tasks/${editing.id}`, data)
       : api("POST", "/api/tasks", data));
+    if (data.remind_before) state.remindDefault = data.remind_before;
     haptic("success");
     closeSheet();
     if (state.page === "calendar" && data.date !== state.selected) selectDay(data.date);
@@ -847,6 +858,7 @@ async function init() {
     const dayChanged = state.today && state.today !== me.today;
     state.today = me.today;
     state.name = tg?.initDataUnsafe?.user?.first_name || me.first_name || "";
+    if (me.remind_before) state.remindDefault = me.remind_before;
     if (!state.selected || dayChanged) {
       state.selected = me.today;
       const d = toDate(me.today);

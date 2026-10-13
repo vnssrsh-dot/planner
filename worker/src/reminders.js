@@ -11,6 +11,12 @@ import { morningText, inviteText, eveningText, openKeyboard, reminderKeyboard, e
 const INVITE_DELAY_MS = 30 * 60 * 1000;
 const FOLLOW_UP_MIN = 30; // «Час минув» — через стільки хвилин після часу справи
 
+// «через 3 год», «через 1 год 20 хв», «через 45 хв»
+function untilText(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return [h ? `${h} год` : "", m ? `${m} хв` : ""].filter(Boolean).join(" ") || "кілька хвилин";
+}
+
 async function send(env, chatId, text, webappUrl, hash) {
   await tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text, reply_markup: openKeyboard(webappUrl, hash) });
 }
@@ -31,10 +37,12 @@ async function checkUser(env, store, user, webappUrl) {
   //    • за 15 хв до часу — «Незабаром»;
   //    • через 30 хв після часу, якщо справу не відмічено, — «Час минув».
   //    Справу, записану вже після її часу, не нагадуємо. Задача о 23:50 отримає «Час минув» після півночі.
-  const yesterday = addDays(now.date, -1);
-  for (const t of await store.timedPending(user.id, yesterday, now.date)) {
+  const yesterday = addDays(now.date, -1), tomorrow = addDays(now.date, 1);
+  for (const t of await store.timedPending(user.id, yesterday, tomorrow)) {
     const [h, m] = t.time.split(":").map(Number);
-    const due = (t.date === now.date ? 0 : -1440) + h * 60 + m; // хвилини від початку сьогоднішньої доби
+    const dayShift = t.date === now.date ? 0 : t.date === yesterday ? -1440 : 1440;
+    const due = dayShift + h * 60 + m;                           // хвилини від початку сьогоднішньої доби
+    const remind = t.remind_before ?? before;                    // «Нагадати за», обране людиною
     const sinceDue = now.minutes - due;                          // >0 — час уже минув
     const dueMs = Date.now() - sinceDue * 60000;
 
@@ -43,11 +51,14 @@ async function checkUser(env, store, user, webappUrl) {
 
     let kind = null;
     if (!t.followed_up && sinceDue >= FOLLOW_UP_MIN) kind = "late";
-    else if (!t.reminded && sinceDue >= -before && sinceDue < FOLLOW_UP_MIN) kind = "soon";
+    else if (!t.reminded && sinceDue >= -remind && sinceDue < FOLLOW_UP_MIN) kind = "soon";
     if (!kind) continue;
 
     const text = kind === "soon"
-      ? `<b>${sinceDue > 0 ? "Вже час" : "Незабаром"}:</b> ${esc(t.title)} о ${t.time}` + (t.note ? `\n<i>${esc(t.note)}</i>` : "")
+      ? `<b>${sinceDue > 0 ? "Вже час" : remind > 60 ? "Нагадування" : "Незабаром"}:</b> ${esc(t.title)} ` +
+        `${t.date === tomorrow ? "завтра " : ""}о ${t.time}` +
+        (sinceDue < 0 && remind > 60 ? ` <i>(через ${untilText(-sinceDue)})</i>` : "") +
+        (t.note ? `\n<i>${esc(t.note)}</i>` : "")
       : `<b>Час минув:</b> ${esc(t.title)} о ${t.time}\nЯкщо вже зроблено — відміть ✓. Якщо ні — перенеси в Ritmoza.`;
     const res = await tg(env, "sendMessage", {
       chat_id: user.chat_id, parse_mode: "HTML", text, reply_markup: reminderKeyboard(t, webappUrl),

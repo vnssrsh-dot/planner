@@ -9,7 +9,7 @@ const SCHEMA = [
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, time TEXT,
      title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, done_at TEXT,
      reminded INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
-     followed_up INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT)`,
+     followed_up INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT, remind_before INTEGER)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks(user_id, date)`,
   `CREATE TABLE IF NOT EXISTS habits (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL,
@@ -26,11 +26,11 @@ export async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
   // база, створена до появи ранкової зведення, — додаємо колонку (якщо вже є, SQLite поверне помилку)
-  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT", "last_seen_at TEXT"]) {
+  for (const col of ["last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT", "last_seen_at TEXT", "remind_before INTEGER"]) {
     try { await db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run(); } catch {}
   }
   // справи: друге нагадування «Час минув» і момент, коли справі востаннє задали дату/час
-  for (const col of ["followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT"]) {
+  for (const col of ["followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT", "remind_before INTEGER"]) {
     try { await db.prepare(`ALTER TABLE tasks ADD COLUMN ${col}`).run(); } catch {}
   }
   // звички: день створення (місцевий) — старт, поки немає жодної відмітки
@@ -40,8 +40,13 @@ export async function ensureSchema(db) {
 
 const now = () => new Date().toISOString().slice(0, 19) + "+00:00";
 
+// За скільки хвилин до справи нагадувати (вибір у формі «Нагадати за»)
+export const REMIND_OPTIONS = [15, 20, 30, 40, 50, 60, 180, 300, 480, 720, 1440];
+export const DEFAULT_REMIND = 15;
+
 const toTask = (r) => ({
   id: r.id, date: r.date, time: r.time, title: r.title, note: r.note, done: !!r.done, done_at: r.done_at,
+  remind_before: r.remind_before ?? DEFAULT_REMIND,
 });
 
 export class Store {
@@ -73,6 +78,14 @@ export class Store {
   // момент першого /start — від нього рахуємо 30 хвилин до запрошення
   markStarted(id) {
     return this.q("UPDATE users SET started_at = ? WHERE id = ? AND started_at IS NULL", new Date().toISOString(), id).run();
+  }
+  // Останній вибір «Нагадати за» — він же значення за замовчуванням (і для /add з чату)
+  async remindDefault(uid) {
+    const r = await this.q("SELECT remind_before FROM users WHERE id = ?", uid).first();
+    return r?.remind_before ?? DEFAULT_REMIND;
+  }
+  setRemindDefault(uid, minutes) {
+    return this.q("UPDATE users SET remind_before = ? WHERE id = ?", minutes, uid).run();
   }
   markWelcomeSent(id) { return this.q("UPDATE users SET welcome_sent = 1 WHERE id = ?", id).run(); }
   // чи користувалась людина планером: є хоч одна справа або звичка
@@ -133,19 +146,23 @@ export class Store {
     const r = await this.q("SELECT * FROM tasks WHERE id = ? AND user_id = ?", id, uid).first();
     return r ? toTask(r) : null;
   }
-  async createTask(uid, { date, title, time = null, note = "" }) {
+  async createTask(uid, { date, title, time = null, note = "", remind_before = null }) {
+    if (remind_before == null) remind_before = await this.remindDefault(uid);
     const res = await this.q(
-      "INSERT INTO tasks (user_id, date, time, title, note, created_at, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      uid, date, time, title, note, now(), new Date().toISOString()).run();
+      "INSERT INTO tasks (user_id, date, time, title, note, created_at, scheduled_at, remind_before) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      uid, date, time, title, note, now(), new Date().toISOString(), remind_before).run();
     return this.getTask(uid, res.meta.last_row_id);
   }
   async updateTask(uid, id, fields) {
     const f = {};
-    for (const k of ["date", "time", "title", "note", "done"]) if (k in fields) f[k] = fields[k];
+    for (const k of ["date", "time", "title", "note", "done", "remind_before"]) if (k in fields) f[k] = fields[k];
     if ("done" in f) { f.done = f.done ? 1 : 0; f.done_at = f.done ? now() : null; }
     if ("date" in f || "time" in f) {
       // перенесли — обидва нагадування знову; запамʼятовуємо, коли саме
       f.reminded = 0; f.followed_up = 0; f.scheduled_at = new Date().toISOString();
+    } else if ("remind_before" in f) {
+      const cur = await this.q("SELECT remind_before FROM tasks WHERE id = ? AND user_id = ?", id, uid).first();
+      if (cur && (cur.remind_before ?? DEFAULT_REMIND) !== f.remind_before) f.reminded = 0; // новий час нагадування
     }
     const keys = Object.keys(f);
     if (keys.length) {
@@ -159,11 +176,12 @@ export class Store {
     return res.meta.changes > 0;
   }
   // Невиконані справи з часом за вчора й сьогодні, по яких ще є що надіслати
-  timedPending(uid, yesterday, today) {
+  // вчора — для «Час минув» після півночі, завтра — для нагадувань за 12 год / за день
+  timedPending(uid, yesterday, tomorrow) {
     return this.all(
-      `SELECT id, date, time, title, note, reminded, followed_up, scheduled_at FROM tasks
-       WHERE user_id = ? AND date IN (?, ?) AND time IS NOT NULL AND done = 0 AND (reminded = 0 OR followed_up = 0)`,
-      uid, yesterday, today);
+      `SELECT id, date, time, title, note, reminded, followed_up, scheduled_at, remind_before FROM tasks
+       WHERE user_id = ? AND date BETWEEN ? AND ? AND time IS NOT NULL AND done = 0 AND (reminded = 0 OR followed_up = 0)`,
+      uid, yesterday, tomorrow);
   }
   markFollowedUp(id) { return this.q("UPDATE tasks SET reminded = 1, followed_up = 1 WHERE id = ?", id).run(); }
 

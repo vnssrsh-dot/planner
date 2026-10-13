@@ -1,6 +1,7 @@
 // REST API для Mini App (ті самі адреси, що й у Python-версії).
 import { localNow, validZone, isDate } from "./time.js";
 import { verifyInitData } from "./telegram.js";
+import { REMIND_OPTIONS } from "./db.js";
 
 export class HttpError extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
@@ -36,6 +37,11 @@ function cleanTask(p, partial) {
   }
   if ("note" in p) out.note = String(p.note ?? "").slice(0, 1000);
   if ("done" in p && partial) out.done = !!p.done;
+  if ("remind_before" in p && p.remind_before != null) {
+    const v = Number(p.remind_before);
+    if (!REMIND_OPTIONS.includes(v)) throw bad("bad remind_before");
+    out.remind_before = v;
+  }
   return out;
 }
 
@@ -82,7 +88,7 @@ export async function handleApi(req, env, store) {
   if (path === "/api/me" && method === "GET") {
     const user = await store.getUser(uid);
     const now = localNow(user?.tz, env.DEFAULT_TZ);
-    return json({ today: now.date, tz: now.tz, first_name: user?.first_name || "" });
+    return json({ today: now.date, tz: now.tz, first_name: user?.first_name || "", remind_before: await store.remindDefault(uid) });
   }
 
   // ---------- справи ----------
@@ -95,11 +101,15 @@ export async function handleApi(req, env, store) {
     return json(await store.overdue(uid, dateParam(url.searchParams.get("today"))));
   }
   if (path === "/api/tasks" && method === "POST") {
-    return json(await store.createTask(uid, cleanTask(await body(req), false)), 201);
+    const data = cleanTask(await body(req), false);
+    if (data.remind_before != null) await store.setRemindDefault(uid, data.remind_before);
+    return json(await store.createTask(uid, data), 201);
   }
   if ((m = path.match(/^\/api\/tasks\/(\d+)$/))) {
     if (method === "PATCH") {
-      const task = await store.updateTask(uid, +m[1], cleanTask(await body(req), true));
+      const data = cleanTask(await body(req), true);
+      if (data.remind_before != null) await store.setRemindDefault(uid, data.remind_before);
+      const task = await store.updateTask(uid, +m[1], data);
       if (!task) throw new HttpError(404, "not found");
       return json(task);
     }

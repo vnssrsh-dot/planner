@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_morning_date TEXT,                  -- дата последней утренней сводки
     created_date      TEXT,                  -- день знакомства с ботом
     welcome_sent      INTEGER NOT NULL DEFAULT 0, -- приглашение заполнить планер уже отправлено
-    started_at        TEXT                   -- момент первого /start (UTC ISO)
+    started_at        TEXT,                  -- момент первого /start (UTC ISO)
+    remind_before     INTEGER                -- последний выбор «Нагадати за» (по умолчанию для новых дел)
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -31,7 +32,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     reminded   INTEGER NOT NULL DEFAULT 0,   -- «Незабаром» уже отправлено
     created_at TEXT NOT NULL,
     followed_up  INTEGER NOT NULL DEFAULT 0, -- «Час минув» отправлено (или не нужно)
-    scheduled_at TEXT                        -- когда делу последний раз задали дату/время (UTC ISO)
+    scheduled_at TEXT,                       -- когда делу последний раз задали дату/время (UTC ISO)
+    remind_before INTEGER                    -- «Нагадати за», минут (NULL = 15)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks(user_id, date);
@@ -56,6 +58,8 @@ CREATE TABLE IF NOT EXISTS habit_marks (
 """
 
 TASK_FIELDS = ("id", "date", "time", "title", "note", "done", "done_at")
+REMIND_OPTIONS = (15, 20, 30, 40, 50, 60, 180, 300, 480, 720, 1440)  # «Нагадати за», минут
+DEFAULT_REMIND = 15
 
 
 def _now() -> str:
@@ -65,6 +69,7 @@ def _now() -> str:
 def _task(row: aiosqlite.Row) -> dict[str, Any]:
     d = {k: row[k] for k in TASK_FIELDS}
     d["done"] = bool(d["done"])
+    d["remind_before"] = row["remind_before"] if row["remind_before"] is not None else DEFAULT_REMIND
     return d
 
 
@@ -78,12 +83,13 @@ class Database:
         self.conn.row_factory = aiosqlite.Row
         await self.conn.executescript(SCHEMA)
         # база, созданная раньше — добавляем новые колонки
-        for col in ("last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0", "started_at TEXT"):
+        for col in ("last_morning_date TEXT", "created_date TEXT", "welcome_sent INTEGER NOT NULL DEFAULT 0",
+                    "started_at TEXT", "remind_before INTEGER"):
             try:
                 await self.conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
             except aiosqlite.OperationalError:
                 pass
-        for col in ("followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT"):
+        for col in ("followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT", "remind_before INTEGER"):
             try:
                 await self.conn.execute(f"ALTER TABLE tasks ADD COLUMN {col}")
             except aiosqlite.OperationalError:
@@ -184,18 +190,35 @@ class Database:
         row = await cur.fetchone()
         return _task(row) if row else None
 
+    async def remind_default(self, user_id: int) -> int:
+        cur = await self.conn.execute("SELECT remind_before FROM users WHERE id = ?", (user_id,))
+        row = await cur.fetchone()
+        return row["remind_before"] if row and row["remind_before"] is not None else DEFAULT_REMIND
+
+    async def set_remind_default(self, user_id: int, minutes: int) -> None:
+        await self.conn.execute("UPDATE users SET remind_before = ? WHERE id = ?", (minutes, user_id))
+        await self.conn.commit()
+
     async def create_task(
         self, user_id: int, *, date: str, title: str, time: str | None = None, note: str = "",
+        remind_before: int | None = None,
     ) -> dict:
+        if remind_before is None:
+            remind_before = await self.remind_default(user_id)
         cur = await self.conn.execute(
-            "INSERT INTO tasks (user_id, date, time, title, note, created_at, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user_id, date, time, title, note, _now(), _now()),
+            "INSERT INTO tasks (user_id, date, time, title, note, created_at, scheduled_at, remind_before)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, date, time, title, note, _now(), _now(), remind_before),
         )
         await self.conn.commit()
         return await self.get_task(user_id, cur.lastrowid)
 
     async def update_task(self, user_id: int, task_id: int, **fields: Any) -> dict | None:
-        allowed = {k: v for k, v in fields.items() if k in ("date", "time", "title", "note", "done")}
+        allowed = {k: v for k, v in fields.items() if k in ("date", "time", "title", "note", "done", "remind_before")}
+        if "remind_before" in allowed and not ("date" in allowed or "time" in allowed):
+            cur = await self.get_task(user_id, task_id)
+            if cur and cur["remind_before"] != allowed["remind_before"]:
+                allowed["reminded"] = 0  # новое время напоминания
         if not allowed:
             return await self.get_task(user_id, task_id)
         if "done" in allowed:
@@ -232,8 +255,8 @@ class Database:
     async def timed_pending(self, user_id: int, yesterday: str, today: str) -> list[dict]:
         cur = await self.conn.execute(
             """
-            SELECT id, date, time, title, note, reminded, followed_up, scheduled_at FROM tasks
-            WHERE user_id = ? AND date IN (?, ?) AND time IS NOT NULL AND done = 0
+            SELECT id, date, time, title, note, reminded, followed_up, scheduled_at, remind_before FROM tasks
+            WHERE user_id = ? AND date BETWEEN ? AND ? AND time IS NOT NULL AND done = 0
               AND (reminded = 0 OR followed_up = 0)
             """,
             (user_id, yesterday, today),

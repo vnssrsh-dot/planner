@@ -7,7 +7,7 @@ from aiogram.utils.web_app import safe_parse_webapp_init_data
 from aiohttp import web
 
 from .config import Config
-from .db import Database
+from .db import REMIND_OPTIONS, Database
 from .timeutil import local_now, safe_zone
 
 WEBAPP_DIR = Path(__file__).resolve().parent.parent / "webapp"
@@ -73,6 +73,14 @@ def _clean(payload: dict, *, partial: bool) -> dict:
         out["note"] = str(payload["note"] or "")[:1000]
     if "done" in payload and partial:
         out["done"] = bool(payload["done"])
+    if payload.get("remind_before") is not None:
+        try:
+            v = int(payload["remind_before"])
+        except (TypeError, ValueError):
+            raise _bad("bad remind_before")
+        if v not in REMIND_OPTIONS:
+            raise _bad("bad remind_before")
+        out["remind_before"] = v
     return out
 
 
@@ -96,6 +104,7 @@ async def me(request: web.Request):
     now = local_now(user["tz"], cfg.default_tz)
     return web.json_response({
         "today": now.date().isoformat(), "tz": now.tzinfo.key, "first_name": user["first_name"] or "",
+        "remind_before": await db.remind_default(request["user_id"]),
     })
 
 
@@ -118,6 +127,8 @@ async def overdue(request: web.Request):
 async def create_task(request: web.Request):
     db = request.app[DB_KEY]
     data = _clean(await _json(request), partial=False)
+    if "remind_before" in data:
+        await db.set_remind_default(request["user_id"], data["remind_before"])
     task = await db.create_task(request["user_id"], **data)
     return web.json_response(task, status=201)
 
@@ -126,6 +137,8 @@ async def create_task(request: web.Request):
 async def update_task(request: web.Request):
     db = request.app[DB_KEY]
     data = _clean(await _json(request), partial=True)
+    if "remind_before" in data:
+        await db.set_remind_default(request["user_id"], data["remind_before"])
     task = await db.update_task(request["user_id"], int(request.match_info["id"]), **data)
     if not task:
         raise web.HTTPNotFound()
