@@ -23,6 +23,18 @@ INVITE_DELAY = timedelta(minutes=30)
 FOLLOW_UP_MIN = 30  # «Час минув» — через столько минут после времени дела
 
 
+async def _deliver(bot: Bot, chat_id: int, text: str, kb) -> bool:
+    """True — доставлено (или бота заблокировали); False — сбой, повторим через минуту."""
+    try:
+        await bot.send_message(chat_id, text, reply_markup=kb)
+    except TelegramForbiddenError:
+        pass
+    except Exception:
+        log.exception("Не удалось отправить сообщение в чат %s, повторим через минуту", chat_id)
+        return False
+    return True
+
+
 async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
     now = local_now(user["tz"], cfg.default_tz)
     today = now.date().isoformat()
@@ -80,21 +92,20 @@ async def check_user(bot: Bot, db: Database, cfg: Config, user) -> None:
 
     # 3) Утром — план дня, хвосты и серии привычек (в пределах 3 часов от MORNING_HOUR, раз в день)
     if cfg.morning_hour <= now.hour < cfg.morning_hour + 3 and user["last_morning_date"] != today:
-        await db.set_last_morning(user["id"], today)
         tasks = await db.tasks_for_day(user["id"], today)
         overdue = await db.overdue(user["id"], today)
         habits = [h for h in await db.habits(user["id"]) if h["start_date"] <= today]
-        await bot.send_message(user["chat_id"], morning_text(today, tasks, overdue, habits), reply_markup=kb)
+        if await _deliver(bot, user["chat_id"], morning_text(today, tasks, overdue, habits), kb):
+            await db.set_last_morning(user["id"], today)
 
     # 4) Вечером — «Підсумки дня» одним сообщением (если есть что сказать)
     if now.hour >= cfg.evening_hour and user["last_evening_date"] != today:
-        await db.set_last_evening(user["id"], today)
         tasks = await db.tasks_for_day(user["id"], today)
         habits = await db.unmarked_habits(user["id"], today)
         tomorrow_empty = not await db.tasks_for_day(user["id"], tomorrow_of(today))
         text = evening_text(tasks, habits, tomorrow_empty)
-        if text:
-            await bot.send_message(user["chat_id"], text, reply_markup=kb)
+        if not text or await _deliver(bot, user["chat_id"], text, kb):
+            await db.set_last_evening(user["id"], today)
 
 
 async def reminder_loop(bot: Bot, db: Database, cfg: Config, interval: int = 60) -> None:

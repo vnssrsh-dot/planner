@@ -18,8 +18,12 @@ function untilText(min) {
 }
 
 async function send(env, chatId, text, webappUrl, hash) {
-  await tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text, reply_markup: openKeyboard(webappUrl, hash) });
+  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text, reply_markup: openKeyboard(webappUrl, hash) });
 }
+
+// Доставлено (або людина заблокувала бота / помилка запиту) — більше не пробуємо;
+// збій мережі чи Telegram — повторимо наступної хвилини
+const delivered = (res) => res.ok || res.error_code === 403 || res.error_code === 400;
 
 async function checkUser(env, store, user, webappUrl) {
   const now = localNow(user.tz, env.DEFAULT_TZ);
@@ -77,18 +81,18 @@ async function checkUser(env, store, user, webappUrl) {
   // 3) Зранку — план дня, хвости і серії звичок (у межах 3 годин від MORNING_HOUR, раз на день)
   const morning = Number(env.MORNING_HOUR || 9);
   if (now.hour >= morning && now.hour < morning + 3 && user.last_morning_date !== now.date) {
-    await store.setLastMorning(user.id, now.date);
     const [tasks, overdue, habits] = await Promise.all([
       store.tasksBetween(user.id, now.date, now.date),
       store.overdue(user.id, now.date),
       store.habits(user.id),
     ]);
-    await send(env, user.chat_id, morningText(now.date, tasks, overdue, habits.filter((h) => h.start_date <= now.date)), webappUrl);
+    const res = await send(env, user.chat_id, morningText(now.date, tasks, overdue, habits.filter((h) => h.start_date <= now.date)), webappUrl);
+    if (delivered(res)) await store.setLastMorning(user.id, now.date);
+    console.log(`morning ${res.ok ? "sent" : delivered(res) ? "dropped " + res.error_code : "FAILED, will retry"}: user ${user.id} ${now.date}`);
   }
 
   // 4) Ввечері — «Підсумки дня» одним повідомленням (якщо є що сказати)
   if (now.hour >= Number(env.EVENING_HOUR || 21) && user.last_evening_date !== now.date) {
-    await store.setLastEvening(user.id, now.date);
     const tomorrow = addDays(now.date, 1);
     const [tasks, habits, tomorrowTasks] = await Promise.all([
       store.tasksBetween(user.id, now.date, now.date),
@@ -96,7 +100,14 @@ async function checkUser(env, store, user, webappUrl) {
       store.tasksBetween(user.id, tomorrow, tomorrow),
     ]);
     const text = eveningText(tasks, habits, tomorrowTasks.length === 0);
-    if (text) await send(env, user.chat_id, text, webappUrl);
+    if (!text) {
+      await store.setLastEvening(user.id, now.date);
+      console.log(`evening skipped (nothing to say): user ${user.id} ${now.date}`);
+    } else {
+      const res = await send(env, user.chat_id, text, webappUrl);
+      if (delivered(res)) await store.setLastEvening(user.id, now.date);
+      console.log(`evening ${res.ok ? "sent" : delivered(res) ? "dropped " + res.error_code : "FAILED, will retry"}: user ${user.id} ${now.date}`);
+    }
   }
 }
 

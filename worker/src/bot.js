@@ -67,6 +67,9 @@ async function onMessage(env, store, msg, webappUrl) {
           : ["На сьогодні справ немає."]),
         "",
         "<i>⏳ чекає · 🔔 «Незабаром» надіслано · ⏰ «Час минув» надіслано (або не потрібне) · ✅ виконано</i>",
+        "",
+        `План дня (${env.MORNING_HOUR || 9}:00): ${user?.last_morning_date === now.date ? "надіслано ✅" : "сьогодні ще ні"}`,
+        `Підсумки дня (${env.EVENING_HOUR || 21}:00): ${user?.last_evening_date === now.date ? "оброблено ✅ (надіслано або не було що сказати)" : "сьогодні ще ні"}`,
       ];
       await tg(env, "sendMessage", { chat_id: msg.chat.id, parse_mode: "HTML", text: lines.join("\n") });
     }
