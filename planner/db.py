@@ -42,8 +42,9 @@ CREATE TABLE IF NOT EXISTS habits (
     user_id    INTEGER NOT NULL REFERENCES users(id),
     title      TEXT NOT NULL,
     kind       TEXT NOT NULL DEFAULT 'build',
-    start_date TEXT NOT NULL,                -- YYYY-MM-DD, з якого дня рахуємо
-    created_at TEXT NOT NULL
+    start_date TEXT NOT NULL,                -- YYYY-MM-DD, день створення (історично)
+    created_at TEXT NOT NULL,
+    base_start TEXT                          -- день створення; старт = найраніша відмітка, інакше він
 );
 
 -- Відмітки: звичку виконано / день без зриву
@@ -87,6 +88,10 @@ class Database:
                 await self.conn.execute(f"ALTER TABLE tasks ADD COLUMN {col}")
             except aiosqlite.OperationalError:
                 pass
+        try:
+            await self.conn.execute("ALTER TABLE habits ADD COLUMN base_start TEXT")
+        except aiosqlite.OperationalError:
+            pass
         await self.conn.commit()
 
     async def close(self) -> None:
@@ -247,7 +252,8 @@ class Database:
 
     async def habits(self, user_id: int) -> list[dict]:
         cur = await self.conn.execute(
-            "SELECT id, title, kind, start_date FROM habits WHERE user_id = ? ORDER BY id", (user_id,)
+            "SELECT id, title, kind, start_date, base_start, created_at FROM habits WHERE user_id = ? ORDER BY id",
+            (user_id,),
         )
         habits = [dict(r) for r in await cur.fetchall()]
         if not habits:
@@ -259,17 +265,22 @@ class Database:
         marks: dict[int, list[str]] = {}
         for r in await cur.fetchall():
             marks.setdefault(r["habit_id"], []).append(r["date"])
+        out = []
         for h in habits:
-            h["marks"] = marks.get(h["id"], [])
-        return habits
+            # старт = найраніша відмітка; без відміток — день створення
+            lst = sorted(marks.get(h["id"], []))
+            base = h["base_start"] or (h["created_at"] or "")[:10] or h["start_date"]
+            out.append({"id": h["id"], "title": h["title"], "kind": h["kind"],
+                        "start_date": lst[0] if lst else base, "base_start": base, "marks": lst})
+        return out
 
     async def get_habit(self, user_id: int, habit_id: int) -> dict | None:
         return next((h for h in await self.habits(user_id) if h["id"] == habit_id), None)
 
     async def create_habit(self, user_id: int, *, title: str, kind: str, start_date: str) -> dict:
         cur = await self.conn.execute(
-            "INSERT INTO habits (user_id, title, kind, start_date, created_at) VALUES (?, ?, ?, ?, ?)",
-            (user_id, title, kind, start_date, _now()),
+            "INSERT INTO habits (user_id, title, kind, start_date, created_at, base_start) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, title, kind, start_date, _now(), start_date),
         )
         await self.conn.commit()
         return await self.get_habit(user_id, cur.lastrowid)
@@ -297,10 +308,6 @@ class Database:
         if on:
             await self.conn.execute(
                 "INSERT OR IGNORE INTO habit_marks (habit_id, date) VALUES (?, ?)", (habit_id, date)
-            )
-            # відмітка раніше старту — зсуваємо старт, щоб статистика була чесною
-            await self.conn.execute(
-                "UPDATE habits SET start_date = ? WHERE id = ? AND start_date > ?", (date, habit_id, date)
             )
         else:
             await self.conn.execute("DELETE FROM habit_marks WHERE habit_id = ? AND date = ?", (habit_id, date))

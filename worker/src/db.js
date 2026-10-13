@@ -13,7 +13,8 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks(user_id, date)`,
   `CREATE TABLE IF NOT EXISTS habits (
      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL,
-     kind TEXT NOT NULL DEFAULT 'build', start_date TEXT NOT NULL, created_at TEXT NOT NULL)`,
+     kind TEXT NOT NULL DEFAULT 'build', start_date TEXT NOT NULL, created_at TEXT NOT NULL,
+     base_start TEXT)`,
   `CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id)`,
   `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`,
   `CREATE TABLE IF NOT EXISTS habit_marks (
@@ -32,6 +33,8 @@ export async function ensureSchema(db) {
   for (const col of ["followed_up INTEGER NOT NULL DEFAULT 0", "scheduled_at TEXT"]) {
     try { await db.prepare(`ALTER TABLE tasks ADD COLUMN ${col}`).run(); } catch {}
   }
+  // звички: день створення (місцевий) — старт, поки немає жодної відмітки
+  try { await db.prepare("ALTER TABLE habits ADD COLUMN base_start TEXT").run(); } catch {}
   schemaReady = true;
 }
 
@@ -174,21 +177,27 @@ export class Store {
 
   // ---------- habits ----------
   async habits(uid) {
-    const habits = await this.all(
-      "SELECT id, title, kind, start_date FROM habits WHERE user_id = ? ORDER BY id", uid);
-    if (!habits.length) return [];
+    const rows = await this.all(
+      "SELECT id, title, kind, start_date, base_start, created_at FROM habits WHERE user_id = ? ORDER BY id", uid);
+    if (!rows.length) return [];
     const marks = await this.all(
-      `SELECT habit_id, date FROM habit_marks WHERE habit_id IN (${habits.map(() => "?").join(",")}) ORDER BY date`,
-      ...habits.map((h) => h.id));
+      `SELECT habit_id, date FROM habit_marks WHERE habit_id IN (${rows.map(() => "?").join(",")}) ORDER BY date`,
+      ...rows.map((h) => h.id));
     const by = {};
     for (const m of marks) (by[m.habit_id] ||= []).push(m.date);
-    return habits.map((h) => ({ ...h, marks: by[h.id] || [] }));
+    // Старт звички = найраніший відмічений день; без відміток — день створення.
+    // Тож помилкова відмітка «до старту» після зняття більше не лишає зайвий «пропущений» день.
+    return rows.map((h) => {
+      const list = (by[h.id] || []).sort();
+      const base = h.base_start || (h.created_at || "").slice(0, 10) || h.start_date;
+      return { id: h.id, title: h.title, kind: h.kind, start_date: list[0] || base, base_start: base, marks: list };
+    });
   }
   async getHabit(uid, id) { return (await this.habits(uid)).find((h) => h.id === id) || null; }
   async createHabit(uid, { title, kind, startDate }) {
     const res = await this.q(
-      "INSERT INTO habits (user_id, title, kind, start_date, created_at) VALUES (?, ?, ?, ?, ?)",
-      uid, title, kind, startDate, now()).run();
+      "INSERT INTO habits (user_id, title, kind, start_date, created_at, base_start) VALUES (?, ?, ?, ?, ?, ?)",
+      uid, title, kind, startDate, now(), startDate).run();
     return this.getHabit(uid, res.meta.last_row_id);
   }
   async updateHabit(uid, id, fields) {
@@ -207,11 +216,7 @@ export class Store {
   async setHabitMark(uid, id, day, on) {
     if (!(await this.getHabit(uid, id))) return null;
     if (on) {
-      await this.db.batch([
-        this.q("INSERT OR IGNORE INTO habit_marks (habit_id, date) VALUES (?, ?)", id, day),
-        // відмітка раніше старту — зсуваємо старт, щоб статистика була чесною
-        this.q("UPDATE habits SET start_date = ? WHERE id = ? AND start_date > ?", day, id, day),
-      ]);
+      await this.q("INSERT OR IGNORE INTO habit_marks (habit_id, date) VALUES (?, ?)", id, day).run();
     } else {
       await this.q("DELETE FROM habit_marks WHERE habit_id = ? AND date = ?", id, day).run();
     }

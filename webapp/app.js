@@ -742,7 +742,8 @@ function toggleHabitDay(h, ds) {
   haptic(on ? "success" : "light");
   // екран змінюється одразу; відповіді сервера НЕ перезаписують відмітки — лише остаточна синхронізація
   h.marks = on ? [...h.marks, ds].sort() : h.marks.filter((d) => d !== ds);
-  if (on && ds < h.start_date) h.start_date = ds;
+  // старт = найраніша відмітка (без відміток — день створення), як і на сервері
+  h.start_date = h.marks[0] || h.base_start || h.start_date;
   renderHabits();
   if (on && ds === state.today) {
     const t = $("habitToggle");
