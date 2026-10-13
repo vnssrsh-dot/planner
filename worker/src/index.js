@@ -43,6 +43,23 @@ ${ok ? "<p>Надішліть боту /start, щоб перевірити.</p>"
   return new Response(html, { status: ok ? 200 : 500, headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 
+function appVersion(env) {
+  return (env.CF_VERSION_METADATA?.id || "dev").slice(0, 12);
+}
+
+// index.html з версією у посиланнях на файли (?v=...) і без кешу — після оновлення
+// Telegram завантажить нові app.js і style.css, а не збережені старі
+async function indexPage(req, env) {
+  const res = await env.ASSETS.fetch(new Request(new URL("/", req.url), req));
+  if (!res.ok) return res;
+  const v = appVersion(env);
+  const html = (await res.text())
+    .replace("__APP_VERSION__", v)
+    .replace('/static/style.css"', `/static/style.css?v=${v}"`)
+    .replace('/static/app.js"', `/static/app.js?v=${v}"`);
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -50,6 +67,11 @@ export default {
     if (url.pathname.startsWith("/static/")) {
       return env.ASSETS.fetch(new Request(new URL(url.pathname.slice(7), url.origin), req));
     }
+    // номер версії: застосунок порівнює його зі своїм і сам оновлюється після deploy
+    if (url.pathname === "/version") {
+      return new Response(appVersion(env), { headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" } });
+    }
+    if (url.pathname === "/" || url.pathname === "/index.html") return indexPage(req, env);
     try {
       if (!env.BOT_TOKEN) {
         return new Response("Ritmoza: додайте секрет BOT_TOKEN у Settings → Variables and Secrets.", {

@@ -1,4 +1,5 @@
 """HTTP API для Mini App + раздача статики."""
+import hashlib
 import re
 from datetime import date
 from pathlib import Path
@@ -221,9 +222,28 @@ async def habit_mark(request: web.Request):
     return web.json_response(habit)
 
 
+def _app_version() -> str:
+    """Номер версії інтерфейсу — змінюється разом із файлами; застосунок за ним сам оновлюється."""
+    h = hashlib.sha256()
+    for name in ("index.html", "app.js", "style.css"):
+        h.update((WEBAPP_DIR / name).read_bytes())
+    return h.hexdigest()[:12]
+
+
+@routes.get("/version")
+async def version(request: web.Request):
+    return web.Response(text=_app_version(), headers={"Cache-Control": "no-store"})
+
+
 @routes.get("/")
 async def index(request: web.Request):
-    return web.FileResponse(WEBAPP_DIR / "index.html")
+    # версія в посиланнях (?v=...) і без кешу — Telegram не триматиме старі файли
+    v = _app_version()
+    html = (WEBAPP_DIR / "index.html").read_text(encoding="utf-8")
+    html = (html.replace("__APP_VERSION__", v)
+                .replace('/static/style.css"', f'/static/style.css?v={v}"')
+                .replace('/static/app.js"', f'/static/app.js?v={v}"'))
+    return web.Response(text=html, content_type="text/html", headers={"Cache-Control": "no-store"})
 
 
 def build_app(db: Database, cfg: Config) -> web.Application:

@@ -10,6 +10,12 @@ keep_vars = true
 [assets]
 directory = "../webapp"
 binding = "ASSETS"
+# Головну сторінку віддає Worker: підставляє номер версії, щоб Telegram не тримав старі файли
+run_worker_first = true
+
+# Номер розгортання — для автооновлення Mini App
+[version_metadata]
+binding = "CF_VERSION_METADATA"
 
 # База даних. ID не вказано навмисно — Wrangler створить базу сам під час першого deploy.
 [[d1_databases]]

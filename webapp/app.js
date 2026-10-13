@@ -596,6 +596,7 @@ function closeSheet() {
 function syncRemindField() { $("remindField").hidden = !form.elements.time.value; }
 form.elements.time.addEventListener("input", syncRemindField);
 form.elements.time.addEventListener("change", syncRemindField);
+form.elements.time.addEventListener("blur", syncRemindField);   // iPhone інколи шле лише blur
 
 form.onsubmit = async (e) => {
   e.preventDefault();
@@ -869,6 +870,33 @@ async function init() {
   hideSplash();
 }
 
+// Автооновлення: після нового deploy застосунок сам перезавантажиться з новими файлами,
+// без повного перезапуску Telegram. Раз на версію — щоб не зациклитись, якщо кеш упертий.
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || "";
+async function checkUpdate() {
+  if (!APP_VERSION || APP_VERSION.startsWith("__")) return false;   // демо без сервера
+  try {
+    const res = await fetch("/version", { cache: "no-store" });
+    if (!res.ok) return false;
+    const v = (await res.text()).trim();
+    if (!v || v === APP_VERSION) return false;
+    let tried = null;
+    try { tried = sessionStorage.getItem("rtmz-reloaded"); } catch {}
+    if (tried === v) return false;
+    if (pendingWrites > 0) return false;              // спершу дочекаємося збереження
+    try { sessionStorage.setItem("rtmz-reloaded", v); } catch {}
+    const u = new URL(location.href);
+    u.searchParams.set("v", v);                      // нова адреса — повз збережену сторінку
+    location.replace(u.toString());
+    return true;
+  } catch { return false; }
+}
+
 // повернулися в застосунок (наприклад, наступного дня) — оновимо дані
-document.addEventListener("visibilitychange", () => { if (!document.hidden) init(); });
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) return;
+  if (await checkUpdate()) return;
+  init();
+});
 init();
+checkUpdate();

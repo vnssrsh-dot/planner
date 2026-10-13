@@ -237,6 +237,13 @@ input, textarea, select { font-size: 16px !important; }
 .field input::placeholder, .field textarea::placeholder { color: var(--inactive); }
 .field input:focus, .field textarea:focus { border-color: var(--accent); background: var(--card); }
 .row { display: flex; gap: 10px; }
+.row > .field { flex: 1 1 0; min-width: 0; }
+/* iPhone: дата й час мають власну ширину і вилазять за край — вирівнюємо як звичайні поля */
+.field input[type="date"], .field input[type="time"] {
+  -webkit-appearance: none; appearance: none; display: block;
+  min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; text-align: left;
+}
+.field input::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .sheet-actions { display: flex; gap: 8px; margin-top: 6px; }
 .btn { flex: 1; padding: 12px; border-radius: 10px; font-weight: 500; }
 .btn:focus-visible, .tab:focus-visible, .cell:focus-visible, .check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
