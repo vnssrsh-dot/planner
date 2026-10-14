@@ -122,11 +122,19 @@ export class Store {
       n("SELECT COUNT(DISTINCT user_id) AS n FROM habits"),
       n("SELECT COUNT(*) AS n FROM habit_marks WHERE date >= ?", dayDate),
     ]);
+    // дата «сьогодні» і «вчора» за Києвом — для перевірки, чи дійшли ранок і вечір
+    const kyiv = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Kyiv" }).format(new Date());
+    const kyivYesterday = new Date(Date.parse(kyiv + "T12:00:00Z") - 864e5).toISOString().slice(0, 10);
+    const [morningToday, eveningYesterday] = await Promise.all([
+      n(`SELECT COUNT(*) AS n FROM users u WHERE last_morning_date = ? AND ${USING}`, kyiv),
+      n(`SELECT COUNT(*) AS n FROM users u WHERE last_evening_date >= ? AND ${USING}`, kyivYesterday),
+    ]);
     const recent = await this.all(
       `SELECT u.first_name, COALESCE(u.started_at, u.created_date) AS joined, ${USING} AS is_using
        FROM users u ORDER BY joined DESC LIMIT 10`);
     return { total, newDay, newWeek, using, activeDay, activeWeek, invited, invitedUsing,
-      tasksTotal, tasksDay, doneDay, habitsTotal, habitUsers, marksDay, recent };
+      tasksTotal, tasksDay, doneDay, habitsTotal, habitUsers, marksDay, recent,
+      morningToday, eveningYesterday };
   }
 
   // ---------- tasks ----------
@@ -177,6 +185,17 @@ export class Store {
   }
   // Невиконані справи з часом за вчора й сьогодні, по яких ще є що надіслати
   // вчора — для «Час минув» після півночі, завтра — для нагадувань за 12 год / за день
+  // Для Cron: усе одним запитом, а не по запиту на кожну людину щохвилини
+  async activeUserIds() {
+    const rows = await this.all("SELECT user_id FROM tasks UNION SELECT user_id FROM habits");
+    return new Set(rows.map((r) => r.user_id));
+  }
+  timedPendingAll(from, to) {
+    return this.all(
+      `SELECT id, user_id, date, time, title, note, reminded, followed_up, scheduled_at, remind_before FROM tasks
+       WHERE date BETWEEN ? AND ? AND time IS NOT NULL AND done = 0 AND (reminded = 0 OR followed_up = 0)`,
+      from, to);
+  }
   timedPending(uid, yesterday, tomorrow) {
     return this.all(
       `SELECT id, date, time, title, note, reminded, followed_up, scheduled_at, remind_before FROM tasks

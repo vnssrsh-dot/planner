@@ -72,6 +72,12 @@ export default {
       return new Response(appVersion(env), { headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/" || url.pathname === "/index.html") return indexPage(req, env);
+    // збої застосунку в людей — у журнал Cloudflare (Observability → шукати «client error»)
+    if (url.pathname === "/client-log" && req.method === "POST") {
+      const body = (await req.text()).slice(0, 1500);
+      console.log("client error", body);
+      return new Response("ok");
+    }
     try {
       if (!env.BOT_TOKEN) {
         return new Response("Ritmoza: додайте секрет BOT_TOKEN у Settings → Variables and Secrets.", {

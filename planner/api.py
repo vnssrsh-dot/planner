@@ -1,5 +1,6 @@
 """HTTP API для Mini App + раздача статики."""
 import hashlib
+import logging
 import re
 from datetime import date
 from pathlib import Path
@@ -233,6 +234,14 @@ def _app_version() -> str:
 @routes.get("/version")
 async def version(request: web.Request):
     return web.Response(text=_app_version(), headers={"Cache-Control": "no-store"})
+
+
+@routes.post("/client-log")
+async def client_log(request: web.Request):
+    """Сбои Mini App у людей — в лог сервера."""
+    body = (await request.text())[:1500]
+    logging.getLogger(__name__).warning("client error %s", body)
+    return web.Response(text="ok")
 
 
 @routes.get("/")

@@ -63,6 +63,7 @@ function haptic(kind) {
 
 function showError(e) {
   console.error(e);
+  window.rtmzReport?.("api: " + (e && e.message));
   const msg = String(e.message).startsWith("401")
     ? "Відкрийте планер через кнопку в боті Telegram."
     : "Не вдалося звʼязатися із сервером. Спробуйте ще раз.";
@@ -119,7 +120,7 @@ async function loadMonth({ force = false } = {}) {
   // застаріла відповідь (місяць уже перегорнули) або йдуть зміни — не перезаписуємо екран
   if (seq !== monthSeq || (!force && pendingWrites)) return false;
   state.byDate = {};
-  for (const t of tasks) (state.byDate[t.date] ||= []).push(t);
+  for (const t of tasks) (state.byDate[t.date] = state.byDate[t.date] || []).push(t);
   return true;
 }
 
@@ -144,7 +145,7 @@ async function reload() {
 function patchLocalTask(id, fields) {
   const lists = [state.todayTasks, state.overdue, ...Object.values(state.byDate)];
   let task = null;
-  for (const list of lists) for (const t of list) if (t.id === id) { Object.assign(t, fields); task ||= t; }
+  for (const list of lists) for (const t of list) if (t.id === id) { Object.assign(t, fields); task = task || t; }
   if (!task) return;
   // перенесення на іншу дату — переставляємо між списками
   state.overdue = state.overdue.filter((t) => !t.done && t.date < state.today);
@@ -153,7 +154,7 @@ function patchLocalTask(id, fields) {
   const copy = { ...task };
   if (copy.date === state.today && !state.todayTasks.some((t) => t.id === id)) state.todayTasks.push(copy);
   if (state.byDate[copy.date] !== undefined || gridHas(copy.date)) {
-    const list = (state.byDate[copy.date] ||= []);
+    const list = (state.byDate[copy.date] = state.byDate[copy.date] || []);
     if (!list.some((t) => t.id === id)) list.push({ ...copy });
   }
   const byTime = (a, b) => (a.time === null) - (b.time === null) || (a.time || "").localeCompare(b.time || "") || a.id - b.id;
@@ -852,6 +853,7 @@ function hideSplash() {
 }
 
 async function init() {
+  window.rtmzStarted = true;
   pickGreeting();
   pickHeroIcon();
   try {

@@ -12,6 +12,37 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Manrope:wght@500;600&display=swap">
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Звіт про збій (і в старих вбудованих браузерах, напр. Telegram на Linux) — щоб бачити, що ламається
+    (function () {
+      var sent = 0;
+      window.rtmzReport = function (msg) {
+        if (sent++ > 5) return;
+        try {
+          var tg = window.Telegram && window.Telegram.WebApp;
+          var x = new XMLHttpRequest();
+          x.open("POST", "/client-log");
+          x.setRequestHeader("Content-Type", "text/plain");
+          x.send(JSON.stringify({ msg: String(msg).slice(0, 500), platform: tg && tg.platform, tgv: tg && tg.version, ua: navigator.userAgent }));
+        } catch (e) {}
+      };
+      window.addEventListener("error", function (e) {
+        window.rtmzReport((e.message || "error") + " @" + (e.filename || "").split("/").pop() + ":" + e.lineno);
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        window.rtmzReport("promise: " + (e.reason && (e.reason.message || e.reason)));
+      });
+      // застосунок так і не запустився — замість вічної заставки підказка
+      setTimeout(function () {
+        var s = document.getElementById("splash");
+        if (s && !s.classList.contains("gone") && !window.rtmzStarted) {
+          window.rtmzReport("not started after 12s");
+          var t = s.querySelector(".tagline");
+          if (t) t.textContent = "Не вдалося запуститися. Оновіть Telegram або відкрийте Ritmoza на телефоні.";
+        }
+      }, 12000);
+    })();
+  </script>
 </head>
 <body>
   <div class="splash" id="splash" aria-hidden="true">

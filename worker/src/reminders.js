@@ -25,13 +25,19 @@ async function send(env, chatId, text, webappUrl, hash) {
 // збій мережі чи Telegram — повторимо наступної хвилини
 const delivered = (res) => res.ok || res.error_code === 403 || res.error_code === 400;
 
-async function checkUser(env, store, user, webappUrl) {
+// Скільки «великих» повідомлень (ранок, вечір, запрошення) надсилати за один запуск Cron.
+// Решта — наступної хвилини: так запуск не впирається в ліміт безкоштовного плану
+// і не обривається посередині, залишивши частину людей без повідомлення.
+const DIGEST_BUDGET = 6;
+
+async function checkUser(env, store, user, webappUrl, ctx) {
   const now = localNow(user.tz, env.DEFAULT_TZ);
   const before = Number(env.REMIND_BEFORE_MIN || 15);
-  const active = await store.hasActivity(user.id);
+  const active = ctx.active.has(user.id);
 
   // 1) Запрошення через 30 хвилин після першого /start — один раз і лише якщо нічого не додано
-  if (!user.welcome_sent && user.started_at && Date.now() - Date.parse(user.started_at) >= INVITE_DELAY_MS) {
+  if (!user.welcome_sent && user.started_at && Date.now() - Date.parse(user.started_at) >= INVITE_DELAY_MS && ctx.budget > 0) {
+    ctx.budget--;
     await store.markWelcomeSent(user.id);
     if (!active) await send(env, user.chat_id, inviteText(now.hour, user.first_name), webappUrl);
   }
@@ -42,7 +48,8 @@ async function checkUser(env, store, user, webappUrl) {
   //    • через 30 хв після часу, якщо справу не відмічено, — «Час минув».
   //    Справу, записану вже після її часу, не нагадуємо. Задача о 23:50 отримає «Час минув» після півночі.
   const yesterday = addDays(now.date, -1), tomorrow = addDays(now.date, 1);
-  for (const t of await store.timedPending(user.id, yesterday, tomorrow)) {
+  for (const t of ctx.timed.get(user.id) || []) {
+    if (t.date < yesterday || t.date > tomorrow) continue;
     const [h, m] = t.time.split(":").map(Number);
     const dayShift = t.date === now.date ? 0 : t.date === yesterday ? -1440 : 1440;
     const due = dayShift + h * 60 + m;                           // хвилини від початку сьогоднішньої доби
@@ -80,7 +87,8 @@ async function checkUser(env, store, user, webappUrl) {
 
   // 3) Зранку — план дня, хвости і серії звичок (у межах 3 годин від MORNING_HOUR, раз на день)
   const morning = Number(env.MORNING_HOUR || 9);
-  if (now.hour >= morning && now.hour < morning + 3 && user.last_morning_date !== now.date) {
+  if (now.hour >= morning && now.hour < morning + 3 && user.last_morning_date !== now.date && ctx.budget > 0) {
+    ctx.budget--;
     const [tasks, overdue, habits] = await Promise.all([
       store.tasksBetween(user.id, now.date, now.date),
       store.overdue(user.id, now.date),
@@ -92,7 +100,8 @@ async function checkUser(env, store, user, webappUrl) {
   }
 
   // 4) Ввечері — «Підсумки дня» одним повідомленням (якщо є що сказати)
-  if (now.hour >= Number(env.EVENING_HOUR || 21) && user.last_evening_date !== now.date) {
+  if (now.hour >= Number(env.EVENING_HOUR || 21) && user.last_evening_date !== now.date && ctx.budget > 0) {
+    ctx.budget--;
     const tomorrow = addDays(now.date, 1);
     const [tasks, habits, tomorrowTasks] = await Promise.all([
       store.tasksBetween(user.id, now.date, now.date),
@@ -112,9 +121,21 @@ async function checkUser(env, store, user, webappUrl) {
 }
 
 export async function runReminders(env, store, webappUrl) {
-  const users = await store.usersWithChat();
+  // три запити на весь запуск, незалежно від кількості людей
+  const utc = new Date().toISOString().slice(0, 10);
+  const [users, active, timedRows] = await Promise.all([
+    store.usersWithChat(),
+    store.activeUserIds(),
+    store.timedPendingAll(addDays(utc, -2), addDays(utc, 2)),   // з запасом на всі часові пояси
+  ]);
+  const timed = new Map();
+  for (const t of timedRows) {
+    if (!timed.has(t.user_id)) timed.set(t.user_id, []);
+    timed.get(t.user_id).push(t);
+  }
+  const ctx = { active, timed, budget: DIGEST_BUDGET };
   for (const user of users) {
-    try { await checkUser(env, store, user, webappUrl); }
+    try { await checkUser(env, store, user, webappUrl, ctx); }
     catch (e) { console.log("reminder error for", user.id, e?.stack || e); }
   }
 }

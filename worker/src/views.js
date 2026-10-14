@@ -187,6 +187,11 @@ export function ownerStatsText(s) {
     `📅 Справ усього: ${s.tasksTotal} · додано за 24 год: ${s.tasksDay}`,
     `✅ Виконано за 24 год: ${s.doneDay}`,
     `🔁 Звичок: ${s.habitsTotal} у ${s.habitUsers} ${s.habitUsers === 1 ? "людини" : "людей"} · відміток за добу: ${s.marksDay}`,
+    "",
+    `<b>Повідомлення бота</b> (з ${s.using}, хто користується)`,
+    `☀️ План дня сьогодні: ${s.morningToday}`,
+    `🌙 Підсумки дня за останній вечір: ${s.eveningYesterday}`,
+    "<i>Підсумки рахуються і тоді, коли сказати не було що (усе виконано).</i>",
   ];
   if (s.recent.length) {
     lines.push("", "<b>Останні, хто приєднався</b>");
