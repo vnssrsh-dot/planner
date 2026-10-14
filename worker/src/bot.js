@@ -56,14 +56,14 @@ async function onMessage(env, store, msg, webappUrl) {
       const user = await store.getUser(u.id);
       const now = localNow(user?.tz, env.DEFAULT_TZ);
       const rows = await store.all(
-        "SELECT title, time, done, reminded, followed_up FROM tasks WHERE user_id = ? AND date = ? ORDER BY time IS NULL, time", u.id, now.date);
+        "SELECT title, time, done, reminded, followed_up, remind_before FROM tasks WHERE user_id = ? AND date = ? ORDER BY time IS NULL, time", u.id, now.date);
       const hm = `${String(now.hour).padStart(2, "0")}:${String(now.minutes % 60).padStart(2, "0")}`;
       const lines = [
         "<b>Ritmoza · перевірка нагадувань</b>",
         `Час бота для вас: <b>${hm}</b>, ${now.date}`,
         `Часовий пояс: <code>${esc(user?.tz || "не відомий — відкрийте застосунок")}</code>`,
         "",
-        ...(rows.length ? rows.map((t) => `${t.done ? "✅" : !t.time ? "·" : t.followed_up ? "⏰" : t.reminded ? "🔔" : "⏳"} ${t.time || "без часу"} — ${esc(t.title)}`)
+        ...(rows.length ? rows.map((t) => `${t.done ? "✅" : !t.time ? "·" : t.followed_up ? "⏰" : t.reminded ? "🔔" : "⏳"} ${t.time || "без часу"} — ${esc(t.title)}${t.time ? ` <i>(нагадати за ${t.remind_before ?? env.REMIND_BEFORE_MIN ?? 15} хв)</i>` : ""}`)
           : ["На сьогодні справ немає."]),
         "",
         "<i>⏳ чекає · 🔔 «Незабаром» надіслано · ⏰ «Час минув» надіслано (або не потрібне) · ✅ виконано</i>",
