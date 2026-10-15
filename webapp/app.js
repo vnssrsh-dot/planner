@@ -1,5 +1,10 @@
 "use strict";
 
+// старі вбудовані браузери (напр. Telegram на старому Linux) не знають replaceChildren
+if (!Element.prototype.replaceChildren) {
+  Element.prototype.replaceChildren = function (...nodes) { this.textContent = ""; this.append(...nodes); };
+}
+
 const tg = window.Telegram?.WebApp;
 if (tg && tg.initData) {
   tg.ready();
